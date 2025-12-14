@@ -1,0 +1,284 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Notion-inspired warm neutrals */
+    --background: 40 20% 98%;
+    --foreground: 30 10% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 30 10% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 10% 15%;
+
+    /* Warm charcoal primary */
+    --primary: 30 8% 20%;
+    --primary-foreground: 40 20% 98%;
+
+    /* Soft warm gray secondary */
+    --secondary: 40 15% 94%;
+    --secondary-foreground: 30 10% 25%;
+
+    --muted: 40 12% 92%;
+    --muted-foreground: 30 8% 45%;
+
+    --accent: 40 15% 90%;
+    --accent-foreground: 30 10% 20%;
+
+    /* Status colors */
+    --success: 142 70% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 95% 55%;
+    --warning-foreground: 30 10% 15%;
+
+    --danger: 0 72% 55%;
+    --danger-foreground: 0 0% 100%;
+
+    --info: 215 85% 55%;
+    --info-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 30 8% 20%;
+
+    --radius: 0.75rem;
+
+    /* Custom shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(30 10% 15% / 0.03);
+    --shadow-md: 0 4px 6px -1px hsl(30 10% 15% / 0.05), 0 2px 4px -2px hsl(30 10% 15% / 0.05);
+    --shadow-lg: 0 10px 15px -3px hsl(30 10% 15% / 0.08), 0 4px 6px -4px hsl(30 10% 15% / 0.05);
+    --shadow-glow: 0 0 20px hsl(142 70% 45% / 0.3);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 30 10% 8%;
+    --foreground: 40 15% 92%;
+
+    --card: 30 10% 10%;
+    --card-foreground: 40 15% 92%;
+
+    --popover: 30 10% 10%;
+    --popover-foreground: 40 15% 92%;
+
+    --primary: 40 15% 92%;
+    --primary-foreground: 30 10% 8%;
+
+    --secondary: 30 8% 16%;
+    --secondary-foreground: 40 15% 85%;
+
+    --muted: 30 8% 18%;
+    --muted-foreground: 40 10% 55%;
+
+    --accent: 30 8% 20%;
+    --accent-foreground: 40 15% 90%;
+
+    --success: 142 70% 50%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 95% 55%;
+    --warning-foreground: 30 10% 10%;
+
+    --danger: 0 72% 60%;
+    --danger-foreground: 0 0% 100%;
+
+    --info: 215 85% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 8% 20%;
+    --input: 30 8% 20%;
+    --ring: 40 15% 80%;
+
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.2);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.25), 0 2px 4px -2px hsl(0 0% 0% / 0.2);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.3), 0 4px 6px -4px hsl(0 0% 0% / 0.25);
+    --shadow-glow: 0 0 20px hsl(142 70% 50% / 0.4);
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+@layer components {
+  .notion-card {
+    @apply bg-card rounded-xl border border-border shadow-sm transition-all duration-300;
+    box-shadow: var(--shadow-md);
+  }
+
+  .notion-card:hover {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .ghost-input {
+    @apply bg-transparent border-none outline-none focus:ring-0 placeholder:text-muted-foreground/50 transition-colors duration-200;
+  }
+
+  .ghost-input:hover {
+    @apply bg-muted/30;
+  }
+
+  .ghost-input:focus {
+    @apply bg-muted/50;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-200;
+  }
+
+  .status-lagging {
+    @apply bg-danger/10 text-danger;
+  }
+
+  .status-on-track {
+    @apply bg-success/10 text-success;
+  }
+
+  .status-overachiever {
+    @apply bg-info/10 text-info;
+  }
+
+  .priority-urgent-important {
+    @apply bg-danger/10 text-danger border border-danger/20;
+  }
+
+  .priority-urgent-not-important {
+    @apply bg-purple-500/10 text-purple-600 border border-purple-500/20;
+  }
+
+  .priority-not-urgent-important {
+    @apply bg-success/10 text-success border border-success/20;
+  }
+
+  .priority-not-urgent-not-important {
+    @apply bg-muted text-muted-foreground border border-border;
+  }
+
+  /* Legacy support */
+  .priority-urgent {
+    @apply bg-danger/10 text-danger border border-danger/20;
+  }
+
+  .priority-normal {
+    @apply bg-muted text-muted-foreground border border-border;
+  }
+
+  .phase-card {
+    @apply flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-border bg-card cursor-pointer transition-all duration-300;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .phase-card:hover {
+    @apply border-primary/30 bg-accent/50;
+    box-shadow: var(--shadow-md);
+  }
+
+  .phase-card.active {
+    @apply border-primary bg-primary/5;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .table-header {
+    @apply text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 border-b border-border/50;
+  }
+}
+
+@layer utilities {
+  .animate-in {
+    animation: animateIn 0.3s ease-out forwards;
+  }
+
+  @keyframes animateIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .glow-success {
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Custom scrollbar styles */
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--muted) / 0.3);
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Responsive table wrapper */
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Smooth scroll */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Better focus visible */
+  .focus-ring:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
