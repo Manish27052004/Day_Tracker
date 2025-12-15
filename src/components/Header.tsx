@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AuthStatus from './AuthStatus';
-import { MigrationButton } from './MigrationButton';
+
 
 const Header = () => {
   const location = useLocation();
@@ -51,8 +51,7 @@ const Header = () => {
             })}
           </nav>
 
-          {/* Migration Button */}
-          <MigrationButton />
+
 
           {/* Auth Button */}
           <AuthStatus />
