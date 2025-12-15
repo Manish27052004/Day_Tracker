@@ -11,9 +11,8 @@ export interface Task {
   targetTime: number; // in minutes
   description: string;
   completedDescription: string;
-  progress: number; // 0-100
+  progress: number; // 0-100+
   isRepeating: boolean; // for daily repeating tasks
-  strikeCount: number; // count of consecutive days completed
   createdAt: Date;
   updatedAt: Date;
   syncStatus: 'pending' | 'synced' | 'error';
@@ -541,7 +540,6 @@ export const generateTasksFromTemplates = async (targetDate: string): Promise<vo
       completedDescription: '',
       progress: 0,
       isRepeating: true,
-      strikeCount: template.strikeCount,
       createdAt: new Date(),
       updatedAt: new Date(),
       syncStatus: 'pending',

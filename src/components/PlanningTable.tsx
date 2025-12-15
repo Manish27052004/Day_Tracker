@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // import { useLiveQuery } from 'dexie-react-hooks';
 // import { db, type Task, getDateString, calculateTaskProgress } from '@/lib/db';
 import { type Task, getDateString } from '@/lib/db';
+import { calculateDuration } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 // import { useSync } from '@/hooks/useSync';
@@ -47,6 +48,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<any[]>([]);
   const [priorities, setPriorities] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]); // 🔥 NEW: Fetch sessions for progress calculation
   const [loading, setLoading] = useState(true);
 
   // Fetch tasks from Supabase only
@@ -79,8 +81,12 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
           completedDescription: t.completed_description || '',
           progress: t.progress || 0,
           isRepeating: t.is_repeating || false,
-          strikeCount: t.strike_count || 0
+          // 🔥 Streak fields
+          templateId: t.template_id,
+          achieverStrike: t.achiever_strike || 0,
+          fighterStrike: t.fighter_strike || 0
         }));
+
         setTasks(tasksConverted);
       } else {
         console.error('Error fetching tasks:', error);
@@ -90,7 +96,127 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
     };
 
     fetchTasks();
+    fetchSessions(); // 🔥 NEW: Fetch sessions immediately
   }, [dateString, user]);
+
+  // 🔥 NEW: Fetch sessions for progress calculation
+  const fetchSessions = async () => {
+    if (!user) {
+      setSessions([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('date', dateString)
+      .eq('user_id', user.id);
+
+    if (!error && data) {
+      setSessions(data);
+    }
+  };
+
+  // 🔥 Calculate progress from sessions AND save to database
+  useEffect(() => {
+    if (!tasks.length || !sessions.length || !user) return;
+
+    const updateProgressInDatabase = async () => {
+      const progressMap: Record<string, number> = {};
+
+      for (const task of tasks) {
+        // Find all sessions for this task
+        const taskSessions = sessions.filter((s: any) => s.task_id === task.id);
+
+        // Calculate total minutes spent
+        const totalMinutes = taskSessions.reduce((sum: number, session: any) => {
+          const duration = calculateDuration(session.start_time, session.end_time);
+          return sum + duration;
+        }, 0);
+
+        // Calculate percentage
+        const progressPercent = task.targetTime > 0
+          ? Math.round((totalMinutes / task.targetTime) * 100)
+          : 0;
+
+        progressMap[task.id] = progressPercent;
+
+        // 🔥 CLIENT-SIDE STREAK CALCULATION
+        if (progressPercent !== task.progress) {
+          // 1. Calculate streaks using our client-side logic
+          const { calculateStreakForTask } = await import('@/lib/streakCalculator');
+
+          const streaks = await calculateStreakForTask(
+            user.id,
+            task.templateId, // FIX: Use camelCase property name
+            task.date,
+            progressPercent
+            // min_target is fetched from the template inside the calculator
+          );
+
+          console.log(`✅ Calculated for ${task.name}: progress=${progressPercent}%, achiever=${streaks.achiever_strike}, fighter=${streaks.fighter_strike}`);
+
+          // 2. Optimistic UI update (instant feedback)
+          setTasks((prevTasks) =>
+            prevTasks.map((t) =>
+              t.id === task.id
+                ? {
+                  ...t,
+                  progress: progressPercent,
+                  achieverStrike: streaks.achiever_strike,
+                  fighterStrike: streaks.fighter_strike
+                }
+                : t
+            )
+          );
+
+          // 3. Save to database with calculated values
+          // 3. Save to database with calculated values
+          const { data: updatedData, error: updateError } = await supabase
+            .from('tasks')
+            .update({
+              progress: progressPercent,
+              achiever_strike: streaks.achiever_strike,
+              fighter_strike: streaks.fighter_strike,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', task.id)
+            .eq('user_id', user.id)
+            .select();
+
+          if (updateError) {
+            console.error('❌ Database UPDATE FAILED:', updateError);
+            // Revert optimistic update on error
+            setTasks((prevTasks) =>
+              prevTasks.map((t) =>
+                t.id === task.id
+                  ? {
+                    ...t,
+                    progress: task.progress, // Revert to old progress
+                    achieverStrike: task.achieverStrike,
+                    fighterStrike: task.fighterStrike
+                  }
+                  : t
+              )
+            );
+          } else {
+            // Success - optimistic update already applied
+            // Just log casually for dev verification if needed
+            const rowsUpdated = updatedData ? updatedData.length : 0;
+            if (rowsUpdated === 0) {
+              console.warn('⚠️ Saved to DB but 0 rows updated (potential ID mismatch)');
+            } else {
+              console.log(`✅ Saved: ${streaks.achiever_strike}/${streaks.fighter_strike}`);
+            }
+          }
+        }
+      }
+
+      setTaskProgress(progressMap);
+    };
+
+    updateProgressInDatabase();
+  }, [tasks, sessions, user]);
 
   // Fetch priorities from Supabase
   useEffect(() => {
@@ -105,6 +231,9 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
     };
     fetchPriorities();
   }, []);
+
+  // Streak calculation is now handled by PostgreSQL trigger
+  // See: migrations/001_create_streak_trigger.sql
 
   // === CLOUD-ONLY FUNCTIONS ===
 
@@ -126,7 +255,6 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       completed_description: '',
       progress: 0,
       is_repeating: isRepeating,
-      strike_count: 0,
       // is_deleted: false, // REMOVED - column doesn't exist in Supabase yet
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -153,8 +281,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
         description: insertedData.description || '',
         completedDescription: insertedData.completed_description || '',
         progress: insertedData.progress || 0,
-        isRepeating: insertedData.is_repeating || false,
-        strikeCount: insertedData.strike_count || 0
+        isRepeating: insertedData.is_repeating || false
       };
 
       setTasks(prevTasks => [...prevTasks, taskConverted]);
@@ -216,6 +343,15 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       return;
     }
 
+    console.log('🔥 Creating task from template:', template);
+
+    // 🔥 FIX: Convert Dexie integer ID to UUID format
+    const templateUuid = `00000000-0000-0000-0000-${String(template.id).padStart(12, '0')}`;
+    console.log('📝 Template ID conversion:', template.id, '→', templateUuid);
+
+    // Streaks will be calculated automatically by PostgreSQL trigger
+    // See: migrations/001_create_streak_trigger.sql
+
     // Create task from selected template with Supabase
     const newTask = {
       // DON'T include 'id' - let Supabase auto-generate it
@@ -229,8 +365,11 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       completed_description: '',
       progress: 0,
       is_repeating: false,
-      strike_count: 0,
-      // is_deleted: false, // REMOVED - column doesn't exist in Supabase yet
+      // 🔥 Save template_id so trigger can calculate streaks
+      template_id: templateUuid,
+      // Trigger will set these automatically based on yesterday's task
+      achiever_strike: 0,
+      fighter_strike: 0,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -245,6 +384,12 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       console.error('Error adding task from template:', error);
       alert('Failed to add task: ' + error.message);
     } else if (insertedData) {
+      console.log('✅ Task created with template_id:', insertedData.template_id);
+      console.log('✅ Base streaks saved:', {
+        achiever: insertedData.achiever_strike,
+        fighter: insertedData.fighter_strike
+      });
+
       // ✨ OPTIMISTIC UPDATE - Add to UI immediately
       const taskConverted = {
         id: insertedData.id,
@@ -257,42 +402,25 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
         completedDescription: insertedData.completed_description || '',
         progress: insertedData.progress || 0,
         isRepeating: insertedData.is_repeating || false,
-        strikeCount: insertedData.strike_count || 0
+        // 🔥 Include streak data
+        templateId: insertedData.template_id,
+        achieverStrike: insertedData.achiever_strike || 0,
+        fighterStrike: insertedData.fighter_strike || 0
       };
 
       setTasks(prevTasks => [...prevTasks, taskConverted]);
     }
   };
 
-  const incrementStrike = async (id: string, currentCount: number) => {
-    if (!user) return;
-
-    const { error } = await supabase
-      .from('tasks')
-      .update({
-        strike_count: currentCount + 1,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
-      .eq('user_id', user.id);
-
-    if (!error) {
-      setTasks(prevTasks =>
-        prevTasks.map(t =>
-          t.id === id ? { ...t, strikeCount: currentCount + 1 } : t
-        )
-      );
-    }
-  };
+  // Removed incrementStrike function - strike_count column no longer exists
 
   return (
     <motion.div
-      className="notion-card overflow-hidden"
+      className="notion-card overflow-hidden w-full space-y-4"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.3 }}
     >
-      {/* Table Wrapper with Horizontal Scroll */}
       <div className="overflow-x-auto custom-scrollbar">
         <table className="w-full border-collapse min-w-max">
           <thead>
@@ -316,110 +444,148 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
 
           <tbody className="divide-y divide-border/50">
             <AnimatePresence mode="popLayout">
-              {tasks?.map((task, index) => (
-                <motion.tr
-                  key={task.id}
-                  layout
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.2, delay: index * 0.05 }}
-                  className="hover:bg-muted/20 transition-colors group"
-                >
-                  {/* Strike - Sticky Left 0 */}
-                  <td className="w-[80px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
-                    <div className="flex flex-col items-center gap-1">
-                      <StrikeBadge taskName={task.name} />
-                    </div>
-                  </td>
+              {tasks?.map((task, index) => {
+                // 🔍 DEBUG: Log task data
+                console.log('Task Data:', {
+                  id: task.id,
+                  name: task.name,
+                  progress: taskProgress[task.id],
+                  templateId: task.templateId,
+                  achieverStrike: task.achieverStrike,
+                  fighterStrike: task.fighterStrike,
+                  isRepeating: task.isRepeating
+                });
 
-                  {/* Task Name - Sticky Left 80px */}
-                  <td className="min-w-[250px] sticky left-[80px] z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <DebouncedInput
-                        value={task.name}
-                        onChange={(value) => updateTask(task.id!, { name: value })}
-                        placeholder="Task name..."
-                        className="ghost-input h-8 text-sm font-medium flex-1 min-w-0"
+                return (
+                  <motion.tr
+                    key={task.id}
+                    layout
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.2, delay: index * 0.05 }}
+                    className="hover:bg-muted/20 transition-colors group"
+                  >
+                    {/* Strike - Sticky Left 0 */}
+                    <td className="w-[80px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
+                      <div className="flex flex-col items-center gap-1">
+                        {/* Display strikes directly from database (calculated by PostgreSQL trigger) */}
+                        {task.achieverStrike === 0 && task.fighterStrike === 0 ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {/* Achiever Strike */}
+                            {task.achieverStrike > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-base">🔥</span>
+                                <span className="text-sm font-semibold text-orange-600">
+                                  {task.achieverStrike}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Fighter Strike */}
+                            {task.fighterStrike > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-base">⚔️</span>
+                                <span className="text-sm font-bold bg-gradient-to-r from-yellow-500 to-orange-600 bg-clip-text text-transparent">
+                                  {task.fighterStrike}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Task Name - Sticky Left 80px */}
+                    <td className="min-w-[250px] sticky left-[80px] z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <DebouncedInput
+                          value={task.name}
+                          onChange={(value) => updateTask(task.id!, { name: value })}
+                          placeholder="Task name..."
+                          className="ghost-input h-8 text-sm font-medium flex-1 min-w-0"
+                        />
+                      </div>
+                    </td>
+
+                    {/* Progress */}
+                    <td className="min-w-[150px] px-4 py-3">
+                      <TaskProgressBar
+                        progress={task.id ? (taskProgress[task.id] || 0) : 0}
+                        targetTime={task.targetTime}
                       />
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Progress */}
-                  <td className="min-w-[150px] px-4 py-3">
-                    <TaskProgressBar
-                      progress={task.id ? (taskProgress[task.id] || 0) : 0}
-                      targetTime={task.targetTime}
-                    />
-                  </td>
+                    {/* Priority */}
+                    <td className="min-w-[150px] px-4 py-3">
+                      <div className="flex justify-center">
+                        <Select
+                          value={task.priority || ''}
+                          onValueChange={(value) => updateTask(task.id!, { priority: value })}
+                        >
+                          <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-muted/50 transition-colors justify-center">
+                            <SelectValue>
+                              <PriorityTag priority={task.priority} />
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent align="center">
+                            {priorities?.map(p => (
+                              <SelectItem key={p.id} value={p.name}>
+                                <PriorityTag priority={p.name} />
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </td>
 
-                  {/* Priority */}
-                  <td className="min-w-[150px] px-4 py-3">
-                    <div className="flex justify-center">
-                      <Select
-                        value={task.priority || ''}
-                        onValueChange={(value) => updateTask(task.id!, { priority: value })}
-                      >
-                        <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-muted/50 transition-colors justify-center">
-                          <SelectValue>
-                            <PriorityTag priority={task.priority} />
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent align="center">
-                          {priorities?.map(p => (
-                            <SelectItem key={p.id} value={p.name}>
-                              <PriorityTag priority={p.name} />
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </td>
+                    {/* Target Time */}
+                    <td className="min-w-[100px] px-4 py-3">
+                      <div className="flex justify-center">
+                        <DurationPicker
+                          value={task.targetTime}
+                          onChange={(minutes) => updateTask(task.id!, { targetTime: minutes })}
+                        />
+                      </div>
+                    </td>
 
-                  {/* Target Time */}
-                  <td className="min-w-[100px] px-4 py-3">
-                    <div className="flex justify-center">
-                      <DurationPicker
-                        value={task.targetTime}
-                        onChange={(minutes) => updateTask(task.id!, { targetTime: minutes })}
+                    {/* Description */}
+                    <td className="min-w-[350px] px-4 py-3">
+                      <DebouncedTextarea
+                        value={task.description}
+                        onChange={(value) => updateTask(task.id!, { description: value })}
+                        placeholder="Description..."
+                        className="ghost-input min-h-[32px] text-sm resize-none"
+                        rows={1}
                       />
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Description */}
-                  <td className="min-w-[350px] px-4 py-3">
-                    <DebouncedTextarea
-                      value={task.description}
-                      onChange={(value) => updateTask(task.id!, { description: value })}
-                      placeholder="Description..."
-                      className="ghost-input min-h-[32px] text-sm resize-none"
-                      rows={1}
-                    />
-                  </td>
+                    {/* Completed Description */}
+                    <td className="min-w-[300px] px-4 py-3">
+                      <p className="text-sm text-muted-foreground truncate">
+                        {task.completedDescription || '—'}
+                      </p>
+                    </td>
 
-                  {/* Completed Description */}
-                  <td className="min-w-[300px] px-4 py-3">
-                    <p className="text-sm text-muted-foreground truncate">
-                      {task.completedDescription || '—'}
-                    </p>
-                  </td>
+                    {/* Actions */}
+                    <td className="w-[80px] px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
 
-                  {/* Actions */}
-                  <td className="w-[80px] px-4 py-3">
-                    <div className="flex items-center justify-center gap-1">
-
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteTask(task.id!)}
-                        className="h-7 w-7 text-muted-foreground hover:text-danger hover:bg-danger/10 transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </motion.tr>
-              ))}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteTask(task.id!)}
+                          className="h-7 w-7 text-muted-foreground hover:text-danger hover:bg-danger/10 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                );
+              })}
             </AnimatePresence>
           </tbody>
         </table>

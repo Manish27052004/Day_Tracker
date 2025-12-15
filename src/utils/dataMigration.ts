@@ -61,13 +61,12 @@ export async function migrateLocalDataToSupabase(): Promise<MigrationResult> {
                     priority: task.priority,
                     target_time: task.targetTime,
                     description: task.description || '',
-                    completed_description: task.completedDescription || '',
+                    completed_description: task.completedDescription || null,
                     progress: task.progress || 0,
                     is_repeating: task.isRepeating || false,
-                    strike_count: task.strikeCount || 0,
                     is_deleted: task.isDeleted || false,
-                    created_at: task.createdAt?.toISOString() || new Date().toISOString(),
-                    updated_at: task.updatedAt?.toISOString() || new Date().toISOString()
+                    created_at: task.createdAt || new Date().toISOString(),
+                    updated_at: task.updatedAt || task.createdAt || new Date().toISOString()
                 };
 
                 const { error } = await supabase

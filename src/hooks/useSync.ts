@@ -18,7 +18,6 @@ const taskToSupabase = (task: Task, userId: string) => ({
     completed_description: task.completedDescription || '',
     progress: task.progress || 0,
     is_repeating: task.isRepeating || false,
-    strike_count: task.strikeCount || 0,
     created_at: task.createdAt?.toISOString() || new Date().toISOString(),
     updated_at: task.updatedAt?.toISOString() || new Date().toISOString()
 });
@@ -140,7 +139,7 @@ export const useSync = () => {
     /**
      * Optimistic Save: Saves to local DB first, then tries to push to cloud
      */
-    const saveTaskWithSync = async (task: Omit<Task, 'id' | 'syncStatus' | 'userId' | 'createdAt' | 'updatedAt'>) => {
+    const saveTaskWithSync = async (task: Omit<Task, 'id' | 'syncStatus' | 'userId' | 'createdAt' | 'updatedAt' | 'strikeCount'>) => {
         // 1. Save locally
         const newTask: Task = {
             ...task,
@@ -208,7 +207,6 @@ export const useSync = () => {
                             completedDescription: cTask.completed_description || '',
                             progress: cTask.progress || 0,
                             isRepeating: cTask.is_repeating || false,
-                            strikeCount: cTask.strike_count || 0,
                             createdAt: new Date(cTask.created_at),
                             updatedAt: new Date(cTask.updated_at),
                             syncStatus: 'synced',

@@ -32,8 +32,9 @@ const Index = () => {
     fetchDateData(dateString);
   }, [dateString, fetchDateData]);
 
-  // === NEW: SyncManager Integration ===
+  // === NEW: SyncManager Integration (TEMPORARILY DISABLED FOR DEBUGGING) ===
   // Trigger sync on mount and when user authenticates
+  /*
   useEffect(() => {
     const runSync = async () => {
       if (user && navigator.onLine) {
@@ -80,6 +81,7 @@ const Index = () => {
 
     return () => clearInterval(syncInterval);
   }, [user]);
+  */
   // === END: SyncManager Integration ===
 
   // Fetch or create sleep entry for the selected date

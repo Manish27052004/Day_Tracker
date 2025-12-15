@@ -28,11 +28,10 @@ export interface SupabaseTask {
     status: string;
     priority: string;
     target_time: number;
-    description: string;
-    completed_description: string;
+    description: string | null;
+    completed_description: string | null;
     progress: number;
     is_repeating: boolean;
-    strike_count: number;
     created_at: string;
     updated_at: string;
 }
