@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Priority, type Category } from '@/lib/db';
+import { useState, useEffect } from 'react';
+import { type Priority, type Category } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import {
     Dialog,
     DialogContent,
@@ -19,7 +20,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 interface SettingsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    defaultTab?: 'priorities' | 'categories';
+    defaultTab?: 'priorities' | 'categories' | 'types';
+}
+
+interface CategoryType {
+    id: number;
+    name: string;
+    order: number;
+    color?: string; // Optional property for now
 }
 
 const COLORS = [
@@ -32,15 +40,24 @@ const COLORS = [
 ];
 
 export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }: SettingsDialogProps) => {
-    const priorities = useLiveQuery(() => db.priorities.orderBy('order').toArray());
-    const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
+    const { user } = useAuth();
 
+    // Cloud State
+    const [priorities, setPriorities] = useState<Priority[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [categoryTypes, setCategoryTypes] = useState<CategoryType[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    // New Item States
     const [newPriorityName, setNewPriorityName] = useState('');
     const [newPriorityColor, setNewPriorityColor] = useState(COLORS[0].value);
 
     const [newCategoryName, setNewCategoryName] = useState('');
-    const [newCategoryType, setNewCategoryType] = useState<Category['type']>('work');
+    const [newCategoryType, setNewCategoryType] = useState<string>('');
     const [newCategoryColor, setNewCategoryColor] = useState(COLORS[0].value);
+
+    const [newTypeName, setNewTypeName] = useState('');
+    const [newTypeColor, setNewTypeColor] = useState(COLORS[0].value);
 
     // Edit State
     const [editingPriorityId, setEditingPriorityId] = useState<number | null>(null);
@@ -51,103 +68,209 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
     const [editCategoryName, setEditCategoryName] = useState('');
     const [editCategoryColor, setEditCategoryColor] = useState('');
 
+    const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
+    const [editTypeName, setEditTypeName] = useState('');
+    const [editTypeColor, setEditTypeColor] = useState('');
+
+    // Fetch Helper
+    const fetchData = async () => {
+        if (!user) return;
+        setLoading(true);
+
+        // 1. Fetch Priorities
+        const { data: pData } = await supabase
+            .from('priorities')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('order', { ascending: true });
+        if (pData) setPriorities(pData);
+
+        // 2. Fetch Category Types (Main Categories)
+        const { data: ctData } = await supabase
+            .from('category_types')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('name', { ascending: true });
+        if (ctData) {
+            setCategoryTypes(ctData);
+            if (!newCategoryType && ctData.length > 0) {
+                setNewCategoryType(ctData[0].name);
+            }
+        }
+
+        // 3. Fetch Execution Categories
+        const { data: cData } = await supabase
+            .from('categories')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('order', { ascending: true });
+        if (cData) setCategories(cData as Category[]);
+
+        setLoading(false);
+    };
+
+    // Initial Fetch
+    useEffect(() => {
+        if (open) fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, user]);
+
+
+    // === TYPE MANAGEMENT (Categories Tab) ===
+    const handleAddType = async () => {
+        if (!newTypeName.trim() || !user) return;
+        const { error } = await supabase.from('category_types').insert({
+            user_id: user.id,
+            name: newTypeName.trim(),
+            order: categoryTypes.length + 1,
+            color: newTypeColor // ADDED COLOR
+        });
+        if (error) alert(error.message);
+        else {
+            setNewTypeName('');
+            fetchData();
+        }
+    };
+
+    const handleUpdateType = async () => {
+        if (!editingTypeId || !user) return;
+        const { error } = await supabase
+            .from('category_types')
+            .update({ name: editTypeName, color: editTypeColor }) // ADDED COLOR
+            .eq('id', editingTypeId)
+            .eq('user_id', user.id);
+
+        if (error) alert(error.message);
+        else {
+            // Update associated categories if name changed
+            const oldType = categoryTypes.find(t => t.id === editingTypeId);
+            if (oldType && oldType.name !== editTypeName) {
+                await supabase
+                    .from('categories')
+                    .update({ type: editTypeName })
+                    .eq('type', oldType.name)
+                    .eq('user_id', user.id);
+            }
+
+            setEditingTypeId(null);
+            fetchData();
+        }
+    };
+
+    const handleDeleteType = async (id: number) => {
+        if (!user) return;
+        if (!confirm('Delete this main category? existing execution categories with this type will stick to the old name until updated.')) return;
+
+        const { error } = await supabase.from('category_types').delete().eq('id', id).eq('user_id', user.id);
+        if (error) alert(error.message);
+        else fetchData();
+    };
+
+
+    // === PRIORITIES LOGIC ===
     const handleAddPriority = async () => {
-        if (!newPriorityName.trim()) return;
-        const count = await db.priorities.count();
-        await db.priorities.add({
+        if (!newPriorityName.trim() || !user) return;
+        const { error } = await supabase.from('priorities').insert({
+            user_id: user.id,
             name: newPriorityName,
             color: newPriorityColor,
-            order: count + 1,
+            order: priorities.length + 1,
         });
-        setNewPriorityName('');
-    };
-
-    const startEditPriority = (p: Priority) => {
-        if (!p.id) return;
-        setEditingPriorityId(p.id);
-        setEditPriorityName(p.name);
-        setEditPriorityColor(p.color);
-    };
-
-    const cancelEditPriority = () => {
-        setEditingPriorityId(null);
-        setEditPriorityName('');
-        setEditPriorityColor('');
+        if (error) alert(`Error: ${error.message}`);
+        else {
+            setNewPriorityName('');
+            fetchData();
+        }
     };
 
     const handleUpdatePriority = async () => {
-        if (!editingPriorityId || !editPriorityName.trim()) return;
-        const oldPriority = priorities?.find(p => p.id === editingPriorityId);
-        if (!oldPriority) return;
+        if (!editingPriorityId || !user) return;
+        const oldPriority = priorities.find(p => p.id === editingPriorityId);
 
-        await db.transaction('rw', db.priorities, db.tasks, db.repeatingTasks, async () => {
-            await db.priorities.update(editingPriorityId, {
-                name: editPriorityName,
-                color: editPriorityColor
-            });
+        const { error } = await supabase.from('priorities')
+            .update({ name: editPriorityName, color: editPriorityColor })
+            .eq('id', editingPriorityId)
+            .eq('user_id', user.id);
 
-            // Cascade update if name changed
-            if (oldPriority.name !== editPriorityName) {
-                await db.tasks.where('priority').equals(oldPriority.name).modify({ priority: editPriorityName });
-                await db.repeatingTasks.where('priority').equals(oldPriority.name).modify({ priority: editPriorityName });
-            }
-        });
+        if (error) {
+            alert(`Error: ${error.message}`);
+            return;
+        }
+
+        // Cascade rename
+        if (oldPriority && oldPriority.name !== editPriorityName) {
+            await supabase.from('tasks')
+                .update({ priority: editPriorityName })
+                .eq('priority', oldPriority.name)
+                .eq('user_id', user.id);
+        }
 
         setEditingPriorityId(null);
+        fetchData();
     };
 
     const handleDeletePriority = async (id: number) => {
-        await db.priorities.delete(id);
+        if (!user) return;
+        const { error } = await supabase.from('priorities').delete().eq('id', id).eq('user_id', user.id);
+        if (!error) fetchData();
     };
 
+
+    // === EXECUTION CATEGORIES LOGIC ===
     const handleAddCategory = async () => {
-        if (!newCategoryName.trim()) return;
-        const count = await db.categories.count();
-        await db.categories.add({
+        if (!newCategoryName.trim() || !user) return;
+        if (!newCategoryType) {
+            alert("Please select a valid Type (Main Category). If none exist, create one in the Categories tab.");
+            return;
+        }
+
+        const { error } = await supabase.from('categories').insert({
+            user_id: user.id,
             name: newCategoryName,
             type: newCategoryType,
             color: newCategoryColor,
-            order: count + 1,
+            order: categories.length + 1,
         });
-        setNewCategoryName('');
-    };
 
-    const startEditCategory = (c: Category) => {
-        if (!c.id) return;
-        setEditingCategoryId(c.id);
-        setEditCategoryName(c.name);
-        setEditCategoryColor(c.color);
-    };
-
-    const cancelEditCategory = () => {
-        setEditingCategoryId(null);
-        setEditCategoryName('');
-        setEditCategoryColor('');
+        if (error) alert(`Error: ${error.message}`);
+        else {
+            setNewCategoryName('');
+            fetchData();
+        }
     };
 
     const handleUpdateCategory = async () => {
-        if (!editingCategoryId || !editCategoryName.trim()) return;
-        const oldCategory = categories?.find(c => c.id === editingCategoryId);
-        if (!oldCategory) return;
+        if (!editingCategoryId || !user) return;
+        const oldCategory = categories.find(c => c.id === editingCategoryId);
 
-        await db.transaction('rw', db.categories, db.sessions, async () => {
-            await db.categories.update(editingCategoryId, {
-                name: editCategoryName,
-                color: editCategoryColor
-            });
+        const { error } = await supabase.from('categories')
+            .update({ name: editCategoryName, color: editCategoryColor })
+            .eq('id', editingCategoryId)
+            .eq('user_id', user.id);
 
-            // Cascade update if name changed
-            if (oldCategory.name !== editCategoryName) {
-                await db.sessions.where('category').equals(oldCategory.name).modify({ category: editCategoryName });
-            }
-        });
+        if (error) {
+            alert(`Error: ${error.message}`);
+            return;
+        }
+
+        // Cascade rename sessions
+        if (oldCategory && oldCategory.name !== editCategoryName) {
+            await supabase.from('sessions')
+                .update({ category: editCategoryName })
+                .eq('category', oldCategory.name)
+                .eq('user_id', user.id);
+        }
 
         setEditingCategoryId(null);
+        fetchData();
     };
 
     const handleDeleteCategory = async (id: number) => {
-        await db.categories.delete(id);
+        if (!user) return;
+        const { error } = await supabase.from('categories').delete().eq('id', id).eq('user_id', user.id);
+        if (!error) fetchData();
     };
+
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -159,29 +282,24 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                     </DialogDescription>
                 </DialogHeader>
 
-                <Tabs defaultValue={defaultTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                <Tabs defaultValue="priorities" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="priorities">Planning Priorities</TabsTrigger>
-                        <TabsTrigger value="categories">Execution Categories</TabsTrigger>
+                        <TabsTrigger value="categories">Categories</TabsTrigger>
+                        <TabsTrigger value="execution">Execution Categories</TabsTrigger>
                     </TabsList>
 
-                    {/* PRIORITIES TAB */}
+                    {/* 1. PLANNING PRIORITIES TAB */}
                     <TabsContent value="priorities" className="space-y-4 py-4">
                         <div className="flex gap-2 items-end border-b pb-4">
                             <div className="flex-1 space-y-2">
                                 <Label>New Priority Name</Label>
-                                <Input
-                                    placeholder="e.g. Urgent"
-                                    value={newPriorityName}
-                                    onChange={(e) => setNewPriorityName(e.target.value)}
-                                />
+                                <Input placeholder="e.g. Urgent" value={newPriorityName} onChange={(e) => setNewPriorityName(e.target.value)} />
                             </div>
                             <div className="w-[140px] space-y-2">
                                 <Label>Color</Label>
                                 <Select value={newPriorityColor} onValueChange={setNewPriorityColor}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         {COLORS.map((c) => (
                                             <SelectItem key={c.label} value={c.value}>
@@ -194,12 +312,8 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <Button onClick={handleAddPriority}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add
-                            </Button>
+                            <Button onClick={handleAddPriority}><Plus className="h-4 w-4 mr-2" />Add</Button>
                         </div>
-
                         <div className="space-y-2">
                             <Label>Existing Priorities</Label>
                             <div className="space-y-2">
@@ -207,47 +321,22 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                     <div key={p.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
                                         {editingPriorityId === p.id ? (
                                             <div className="flex items-center gap-2 flex-1">
-                                                <Input
-                                                    value={editPriorityName}
-                                                    onChange={(e) => setEditPriorityName(e.target.value)}
-                                                    className="h-8"
-                                                />
+                                                <Input value={editPriorityName} onChange={(e) => setEditPriorityName(e.target.value)} className="h-8" />
                                                 <Select value={editPriorityColor} onValueChange={setEditPriorityColor}>
-                                                    <SelectTrigger className="w-[140px] h-8">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
+                                                    <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
                                                     <SelectContent>
-                                                        {COLORS.map((c) => (
-                                                            <SelectItem key={c.label} value={c.value}>
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />
-                                                                    {c.label}
-                                                                </div>
-                                                            </SelectItem>
-                                                        ))}
+                                                        {COLORS.map((c) => (<SelectItem key={c.label} value={c.value}><div className="flex items-center gap-2"><div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />{c.label}</div></SelectItem>))}
                                                     </SelectContent>
                                                 </Select>
-                                                <Button size="icon" variant="ghost" onClick={handleUpdatePriority} className="h-8 w-8 text-success hover:text-success/80">
-                                                    <Check className="h-4 w-4" />
-                                                </Button>
-                                                <Button size="icon" variant="ghost" onClick={cancelEditPriority} className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                                                    <X className="h-4 w-4" />
-                                                </Button>
+                                                <Button size="icon" variant="ghost" onClick={handleUpdatePriority} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
+                                                <Button size="icon" variant="ghost" onClick={() => setEditingPriorityId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></Button>
                                             </div>
                                         ) : (
                                             <>
-                                                <div className="flex items-center gap-3">
-                                                    <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", p.color)}>
-                                                        {p.name}
-                                                    </span>
-                                                </div>
+                                                <div className="flex items-center gap-3"><span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", p.color)}>{p.name}</span></div>
                                                 <div className="flex items-center gap-1">
-                                                    <Button variant="ghost" size="icon" onClick={() => startEditPriority(p)} className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                                                        <Pencil className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeletePriority(p.id!)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    <Button variant="ghost" size="icon" onClick={() => { setEditingPriorityId(p.id!); setEditPriorityName(p.name); setEditPriorityColor(p.color); }}><Pencil className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDeletePriority(p.id!)}><Trash2 className="h-4 w-4" /></Button>
                                                 </div>
                                             </>
                                         )}
@@ -257,35 +346,20 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                         </div>
                     </TabsContent>
 
-                    {/* CATEGORIES TAB */}
+                    {/* 2. CATEGORIES (TYPES) TAB */}
                     <TabsContent value="categories" className="space-y-4 py-4">
+                        <div className="flex flex-col space-y-2 mb-4">
+                            <p className="text-sm text-muted-foreground">Define your main categories (e.g., Work, Life, Hobby). These color-code your pie chart.</p>
+                        </div>
                         <div className="flex gap-2 items-end border-b pb-4">
                             <div className="flex-1 space-y-2">
                                 <Label>New Category Name</Label>
-                                <Input
-                                    placeholder="e.g. Deep Work"
-                                    value={newCategoryName}
-                                    onChange={(e) => setNewCategoryName(e.target.value)}
-                                />
-                            </div>
-                            <div className="w-[120px] space-y-2">
-                                <Label>Type</Label>
-                                <Select value={newCategoryType} onValueChange={(v: Category['type']) => setNewCategoryType(v)}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="work">Work</SelectItem>
-                                        <SelectItem value="life">Life</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <Input placeholder="e.g. Hobby" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
                             </div>
                             <div className="w-[140px] space-y-2">
                                 <Label>Color</Label>
-                                <Select value={newCategoryColor} onValueChange={setNewCategoryColor}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
+                                <Select value={newTypeColor} onValueChange={setNewTypeColor}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         {COLORS.map((c) => (
                                             <SelectItem key={c.label} value={c.value}>
@@ -298,72 +372,129 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <Button onClick={handleAddCategory}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add
-                            </Button>
+                            <Button onClick={handleAddType}><Plus className="h-4 w-4 mr-2" />Add</Button>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Existing Categories</Label>
+                            {categoryTypes.map((t) => (
+                                <div key={t.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                                    {editingTypeId === t.id ? (
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <Input value={editTypeName} onChange={(e) => setEditTypeName(e.target.value)} className="h-8" />
+                                            <Select value={editTypeColor} onValueChange={setEditTypeColor}>
+                                                <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    {COLORS.map((c) => (<SelectItem key={c.label} value={c.value}><div className="flex items-center gap-2"><div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />{c.label}</div></SelectItem>))}
+                                                </SelectContent>
+                                            </Select>
+                                            <Button size="icon" variant="ghost" onClick={handleUpdateType} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
+                                            <Button size="icon" variant="ghost" onClick={() => setEditingTypeId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></Button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center gap-3">
+                                                <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", t.color)}>
+                                                    {t.name}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name); setEditTypeColor(t.color || COLORS[5].value); }}><Pencil className="h-4 w-4" /></Button>
+                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteType(t.id)}><Trash2 className="h-4 w-4" /></Button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </TabsContent>
+
+                    {/* 3. EXECUTION CATEGORIES TAB */}
+                    <TabsContent value="execution" className="space-y-4 py-4">
+                        <div className="flex flex-col space-y-2 mb-4">
+                            <p className="text-sm text-muted-foreground">Add specific activities for your daily execution, grouped by the categories defined above.</p>
+                        </div>
+                        <div className="flex gap-2 items-end border-b pb-4">
+                            <div className="flex-1 space-y-2">
+                                <Label>New Activity Name</Label>
+                                <Input placeholder="e.g. Deep Work" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                            </div>
+                            <div className="w-[140px] space-y-2">
+                                <Label>Category</Label>
+                                <Select value={newCategoryType} onValueChange={setNewCategoryType}>
+                                    <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {categoryTypes.map(t => (
+                                            <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="w-[140px] space-y-2">
+                                <Label>Color</Label>
+                                <Select value={newCategoryColor} onValueChange={setNewCategoryColor}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {COLORS.map((c) => (<SelectItem key={c.label} value={c.value}><div className="flex items-center gap-2"><div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />{c.label}</div></SelectItem>))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <Button onClick={handleAddCategory}><Plus className="h-4 w-4 mr-2" />Add</Button>
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Existing Categories</Label>
+                            <Label>Existing Activities</Label>
                             <div className="grid gap-4">
-                                {['work', 'life'].map((type) => (
-                                    <div key={type}>
-                                        <h4 className="text-sm font-medium text-muted-foreground mb-2 capitalize">{type}</h4>
+                                {categoryTypes.map((type) => (
+                                    <div key={type.id}>
+                                        <h4 className="text-sm font-medium text-muted-foreground mb-2 capitalize">{type.name}</h4>
                                         <div className="space-y-2">
-                                            {categories?.filter(c => c.type === type).map((c) => (
+                                            {categories?.filter(c => c.type === type.name).map((c) => (
                                                 <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
                                                     {editingCategoryId === c.id ? (
                                                         <div className="flex items-center gap-2 flex-1">
-                                                            <Input
-                                                                value={editCategoryName}
-                                                                onChange={(e) => setEditCategoryName(e.target.value)}
-                                                                className="h-8"
-                                                            />
+                                                            <Input value={editCategoryName} onChange={(e) => setEditCategoryName(e.target.value)} className="h-8 flex-1" />
                                                             <Select value={editCategoryColor} onValueChange={setEditCategoryColor}>
-                                                                <SelectTrigger className="w-[140px] h-8">
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
+                                                                <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
                                                                 <SelectContent>
-                                                                    {COLORS.map((color) => (
-                                                                        <SelectItem key={color.label} value={color.value}>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <div className={cn("w-3 h-3 rounded-full", color.value.split(' ')[0])} />
-                                                                                {color.label}
-                                                                            </div>
-                                                                        </SelectItem>
-                                                                    ))}
+                                                                    {COLORS.map((c) => (<SelectItem key={c.label} value={c.value}><div className="flex items-center gap-2"><div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />{c.label}</div></SelectItem>))}
                                                                 </SelectContent>
                                                             </Select>
-                                                            <Button size="icon" variant="ghost" onClick={handleUpdateCategory} className="h-8 w-8 text-success hover:text-success/80">
-                                                                <Check className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button size="icon" variant="ghost" onClick={cancelEditCategory} className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                                                                <X className="h-4 w-4" />
-                                                            </Button>
+                                                            <Button size="icon" variant="ghost" onClick={handleUpdateCategory} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
+                                                            <Button size="icon" variant="ghost" onClick={() => setEditingCategoryId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></Button>
                                                         </div>
                                                     ) : (
                                                         <>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className={cn("text-sm font-medium", c.color.split(' ')[1])}>
-                                                                    {c.name}
-                                                                </span>
-                                                            </div>
+                                                            <div className="flex items-center gap-3"><span className={cn("text-sm font-medium", c.color.split(' ')[1])}>{c.name}</span></div>
                                                             <div className="flex items-center gap-1">
-                                                                <Button variant="ghost" size="icon" onClick={() => startEditCategory(c)} className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                                                                    <Pencil className="h-4 w-4" />
-                                                                </Button>
-                                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(c.id!)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
+                                                                <Button variant="ghost" size="icon" onClick={() => { setEditingCategoryId(c.id!); setEditCategoryName(c.name); setEditCategoryColor(c.color); }}><Pencil className="h-4 w-4" /></Button>
+                                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(c.id!)}><Trash2 className="h-4 w-4" /></Button>
                                                             </div>
                                                         </>
                                                     )}
                                                 </div>
                                             ))}
+                                            {categories?.filter(c => c.type === type.name).length === 0 && (
+                                                <p className="text-xs text-muted-foreground italic px-2">No activities</p>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
+                                {/* Handle orphan categories whose type might have been deleted or manually changed */}
+                                {categories?.filter(c => !categoryTypes.find(t => t.name === c.type)).length > 0 && (
+                                    <div>
+                                        <h4 className="text-sm font-medium text-destructive mb-2 capitalize">Uncategorized / Unknown Type</h4>
+                                        <div className="space-y-2">
+                                            {categories?.filter(c => !categoryTypes.find(t => t.name === c.type)).map((c) => (
+                                                <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg bg-card border-destructive/20">
+                                                    <span className={cn("text-sm font-medium", c.color.split(' ')[1])}>
+                                                        {c.name} <span className="text-[10px] text-muted-foreground">({c.type})</span>
+                                                    </span>
+                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(c.id!)}><Trash2 className="h-4 w-4" /></Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </TabsContent>

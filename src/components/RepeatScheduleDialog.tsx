@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+// import { useLiveQuery } from 'dexie-react-hooks'; // REMOVED
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
@@ -23,7 +22,9 @@ import DurationPicker from './DurationPicker';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import PriorityTag from './PriorityTag';
-import { db, type Task, type RepeatingTask } from '@/lib/db';
+import { db, type Task, type RepeatingTask, type Priority } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 interface RepeatScheduleDialogProps {
@@ -43,9 +44,14 @@ const DAYS_OF_WEEK = [
 ];
 
 const RepeatScheduleDialog = ({ open, onOpenChange, task }: RepeatScheduleDialogProps) => {
-    const priorities = useLiveQuery(() => db.priorities.orderBy('order').toArray());
+    // const priorities = useLiveQuery(() => db.priorities.orderBy('order').toArray()); // REMOVED
+    const { user } = useAuth();
+    const [priorities, setPriorities] = useState<Priority[]>([]);
+
     const [name, setName] = useState(task?.name || '');
-    const [priority, setPriority] = useState<Task['priority']>(task?.priority || 'normal');
+    const [priority, setPriority] = useState<Task['priority']>(task?.priority || null); // Changed default to null or 'normal'? 'normal' doesn't exist in new schema usually.
+    // Let's stick to null or what was passed. If 'normal' was passed, it might be legacy. 
+    // New system uses dynamic strings.
     const [targetTime, setTargetTime] = useState(task?.targetTime || 60);
     const [description, setDescription] = useState(task?.description || '');
     const [repeatPattern, setRepeatPattern] = useState<'daily' | 'weekly' | 'custom'>('daily');
@@ -54,19 +60,35 @@ const RepeatScheduleDialog = ({ open, onOpenChange, task }: RepeatScheduleDialog
     const [useTimeSchedule, setUseTimeSchedule] = useState(false);
     const [minCompletionTarget, setMinCompletionTarget] = useState(50); // Default 50%
 
+    // Fetch Priorities from Supabase
+    useEffect(() => {
+        const fetchPriorities = async () => {
+            if (!user) return;
+            const { data } = await supabase
+                .from('priorities')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('order', { ascending: true });
+
+            if (data) setPriorities(data);
+        };
+        if (open) fetchPriorities();
+    }, [open, user]);
+
+
     // Initialize form state when dialog opens or task changes
     useEffect(() => {
         if (open) {
             if (task) {
                 // Editing existing task
                 setName(task.name || '');
-                setPriority(task.priority || 'normal');
+                setPriority(task.priority || null);
                 setTargetTime(task.targetTime || 60);
                 setDescription(task.description || '');
             } else {
                 // Creating new template - reset form
                 setName('');
-                setPriority('normal');
+                setPriority(null);
                 setTargetTime(60);
                 setDescription('');
                 setRepeatPattern('daily');
@@ -114,7 +136,9 @@ const RepeatScheduleDialog = ({ open, onOpenChange, task }: RepeatScheduleDialog
         const isEditingTemplate = task && 'isActive' in task && task.id;
 
         if (isEditingTemplate) {
-            // Update existing template
+            // Update existing template (still Dexie for now?)
+            // The user only asked to migrate Settings/Categories/Priorities.
+            // Templates are not mentioned. So I keep Dexie for templates.
             await db.repeatingTasks.update(task.id!, templateData);
         } else {
             // Create new template
@@ -162,14 +186,14 @@ const RepeatScheduleDialog = ({ open, onOpenChange, task }: RepeatScheduleDialog
                         {/* Priority */}
                         <div className="space-y-2">
                             <Label>Priority</Label>
-                            <Select value={priority} onValueChange={(v) => setPriority(v)}>
+                            <Select value={priority || ''} onValueChange={(v) => setPriority(v)}>
                                 <SelectTrigger>
-                                    <SelectValue />
+                                    <SelectValue placeholder="Select priority" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {priorities?.map(p => (
                                         <SelectItem key={p.id} value={p.name}>
-                                            <PriorityTag priority={p.name} />
+                                            <PriorityTag priority={p.name} color={p.color} />
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

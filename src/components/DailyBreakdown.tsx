@@ -36,8 +36,8 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownPro
     // Cloud Data State
     const [sessions, setSessions] = useState<any[]>([]);
     const [tasks, setTasks] = useState<any[]>([]);
-    // Sleep Entry removed in favor of props
     const [categories, setCategories] = useState<any[]>([]);
+    const [categoryTypes, setCategoryTypes] = useState<any[]>([]); // Added for main types colors
     const [loading, setLoading] = useState(true);
 
     const dateString = getDateString(selectedDate);
@@ -63,14 +63,19 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownPro
                     .eq('date', dateString)
                     .eq('user_id', user.id);
 
-                // 3. Fetch Categories (Global)
+                // 3. Fetch Categories (Execution)
                 const { data: categoriesData } = await supabase
                     .from('categories')
                     .select('*')
                     .eq('user_id', user.id);
 
+                // 4. Fetch Category Types (Main Types for Colors)
+                const { data: typesData } = await supabase
+                    .from('category_types')
+                    .select('*')
+                    .eq('user_id', user.id);
+
                 if (sessionsData) {
-                    // Normalize session data structure
                     setSessions(sessionsData.map(s => ({
                         id: s.id,
                         taskId: s.task_id,
@@ -89,6 +94,9 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownPro
                 if (categoriesData) setCategories(categoriesData);
                 else setCategories([]);
 
+                if (typesData) setCategoryTypes(typesData);
+                else setCategoryTypes([]);
+
             } catch (error) {
                 console.error("Error fetching breakdown data:", error);
             } finally {
@@ -100,34 +108,63 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownPro
     }, [dateString, user]);
 
 
-    // Build color map from categories
+    // Build color map from categories AND category_types
     const categoryColors = useMemo(() => {
         // Fallback to defaults first
         const colorMap: Record<string, string> = { ...DEFAULT_COLORS };
 
-        if (!categories || categories.length === 0) return colorMap;
+        // 1. Execution Categories Colors
+        if (categories) {
+            for (const cat of categories) {
+                if (cat.color) {
+                    if (cat.color.startsWith('#')) {
+                        colorMap[cat.name] = cat.color;
+                    } else {
+                        // Map common tailwind classes
+                        if (cat.color.includes('success')) colorMap[cat.name] = '#10b981';
+                        else if (cat.color.includes('info') || cat.color.includes('blue')) colorMap[cat.name] = '#3b82f6';
+                        else if (cat.color.includes('warning') || cat.color.includes('yellow')) colorMap[cat.name] = '#f59e0b';
+                        else if (cat.color.includes('danger') || cat.color.includes('red')) colorMap[cat.name] = '#ef4444';
+                        else if (cat.color.includes('purple')) colorMap[cat.name] = '#8b5cf6';
+                        else if (cat.color.includes('muted') || cat.color.includes('gray')) colorMap[cat.name] = '#6b7280';
+                        else if (cat.color.includes('green')) colorMap[cat.name] = '#22c55e';
+                    }
+                }
+            }
+        }
 
-        for (const cat of categories) {
-            // Extract color from DB or styles
-            // Assuming DB stores tailwind classes in 'color' or hex
-            if (cat.color) {
-                if (cat.color.startsWith('#')) {
-                    colorMap[cat.name] = cat.color;
-                } else {
-                    // Map common tailwind classes
-                    if (cat.color.includes('success')) colorMap[cat.name] = '#10b981';
-                    else if (cat.color.includes('info') || cat.color.includes('blue')) colorMap[cat.name] = '#3b82f6';
-                    else if (cat.color.includes('warning') || cat.color.includes('yellow')) colorMap[cat.name] = '#f59e0b';
-                    else if (cat.color.includes('danger') || cat.color.includes('red')) colorMap[cat.name] = '#ef4444';
-                    else if (cat.color.includes('purple')) colorMap[cat.name] = '#8b5cf6';
-                    else if (cat.color.includes('muted') || cat.color.includes('gray')) colorMap[cat.name] = '#6b7280';
-                    else if (cat.color.includes('green')) colorMap[cat.name] = '#22c55e';
+        // 2. Category Types Colors (Main Types like WORK, LIFE, SECRET)
+        if (categoryTypes) {
+            for (const type of categoryTypes) {
+                if (type.color && type.name) {
+                    // Logic to extract hex/tailwind color similar to above
+                    // The chart logic typically uppercases these keys (e.g. SECRET)
+                    const normalizedName = type.name.toUpperCase(); // Ensure match with chart logic
+
+                    if (type.color.startsWith('#')) {
+                        colorMap[normalizedName] = type.color;
+                        // Also map original case just in case
+                        colorMap[type.name] = type.color;
+                    } else {
+                        // Map common tailwind classes
+                        let hex = '#94a3b8'; // default
+                        if (type.color.includes('success')) hex = '#10b981';
+                        else if (type.color.includes('info') || type.color.includes('blue')) hex = '#3b82f6';
+                        else if (type.color.includes('warning') || type.color.includes('yellow')) hex = '#f59e0b';
+                        else if (type.color.includes('danger') || type.color.includes('red')) hex = '#ef4444';
+                        else if (type.color.includes('purple')) hex = '#8b5cf6';
+                        else if (type.color.includes('muted') || type.color.includes('gray')) hex = '#6b7280';
+                        else if (type.color.includes('green')) hex = '#22c55e';
+
+                        colorMap[normalizedName] = hex;
+                        colorMap[type.name] = hex;
+                    }
                 }
             }
         }
 
         return colorMap;
-    }, [categories]);
+    }, [categories, categoryTypes]);
 
     // Create a map of taskId to task name
     const taskNameMap = useMemo(() => {
@@ -171,6 +208,19 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownPro
         });
     }, [sessions, taskNameMap]);
 
+    // Build category type map (Name -> Type)
+    const categoryTypeMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        if (categories) {
+            for (const cat of categories) {
+                if (cat.name && cat.type) {
+                    map[cat.name] = cat.type;
+                }
+            }
+        }
+        return map;
+    }, [categories]);
+
     // Generate chart data
     const chartData = useMemo(() => {
         try {
@@ -182,12 +232,13 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownPro
                 bedTime: bedTime,
                 viewMode,
                 categoryColors,
+                categoryTypeMap, // 🔥 PASSING DYNAMIC MAP
             });
         } catch (error) {
             console.error('Error generating chart data:', error);
             return [];
         }
-    }, [logs, selectedDate, wakeUpTime, bedTime, viewMode, categoryColors]);
+    }, [logs, selectedDate, wakeUpTime, bedTime, viewMode, categoryColors, categoryTypeMap]);
 
     // Calculate total tracked time (excluding "Untracked")
     const totalTrackedMinutes = useMemo(() => {

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { type Session, type Task, formatDuration, calculateDuration, getDateString, type Category } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { calculateStreakForTask } from '@/lib/streakCalculator'; // \ud83d\udd25 FIX
+import { calculateStreakForTask } from '@/lib/streakCalculator'; // 🔥 FIX
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -60,7 +60,7 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
   // CLOUD-ONLY STATE
   const [sessions, setSessions] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 🔥 FIX: Track session IDs to prevent duplicates
@@ -115,46 +115,37 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
           id: t.id,
           name: t.name,
           targetTime: t.target_time,
-          templateId: t.template_id // \ud83d\udd25 NEW: Needed for streak calculation
+          templateId: t.template_id // 🔥 NEW: Needed for streak calculation
         })));
       }
     };
     fetchTasks();
   }, [dateString, user]);
 
-  // Fetch categories
+  // Fetch categories (Dynamic from Supabase)
   useEffect(() => {
     const fetchCategories = async () => {
-      // Hardcoded categories for now
-      setCategories([
-        { id: 1, name: 'Deep Work', type: 'work', color: 'text-blue-600', order: 1 },
-        { id: 2, name: 'Shallow Work', type: 'work', color: 'text-cyan-600', order: 2 },
-        { id: 3, name: 'Meeting', type: 'work', color: 'text-purple-600', order: 3 },
-        { id: 4, name: 'Exercise', type: 'life', color: 'text-green-600', order: 4 },
-        { id: 5, name: 'Reading', type: 'life', color: 'text-amber-600', order: 5 },
-        { id: 6, name: 'Social', type: 'life', color: 'text-pink-600', order: 6 }
-      ]);
+      if (!user) return;
+      const { data } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order', { ascending: true });
+
+      if (data) setCategories(data as Category[]);
     };
     fetchCategories();
-  }, []);
-
-  // ... (remove this line)
+  }, [user, settingsOpen]); // Refetch when settings closes
 
   // ... (existing helper function: calculateDuration)
 
   // Inside ExecutionTable component:
 
-  // \ud83d\udd25 FIX: Client-Side Streak Calculation & Task Update
+  // 🔥 FIX: Client-Side Streak Calculation & Task Update
   const updateTaskProgress = async (taskId: string) => {
     if (!taskId || !user) return;
 
     // 1. Calculate total duration from ALL sessions for this task
-    // Note: We use the *updated* sessions state.
-    // However, setSessions is async, so we might need to rely on the fetched data or pass the new session list.
-    // For simplicity, we'll fetch the latest sessions from Supabase to be safe, 
-    // OR we can calculate from the current `sessions` state if we assume it's up to date (optimistic).
-    // Let's use the local 'sessions' state but filtering carefully.
-
     // Better: Fetch fresh sessions to ensure accuracy before writing to 'tasks'
     const { data: taskSessions } = await supabase
       .from('sessions')
@@ -175,7 +166,7 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
       ? Math.round((totalMinutes / task.targetTime) * 100)
       : 0;
 
-    console.log(`\u267b\ufe0f Syncing Task ${taskId}: ${totalMinutes}m / ${task.targetTime}m = ${progressPercent}%`);
+    console.log(`♻️ Syncing Task ${taskId}: ${totalMinutes}m / ${task.targetTime}m = ${progressPercent}%`);
 
     // 3. Calculate Streak (Client-Side)
     const streaks = await calculateStreakForTask(
@@ -198,35 +189,26 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
       .eq('id', taskId);
 
     if (error) console.error('Error updating task progress:', error);
-    else console.log(`\u2705 Task Updated: ${streaks.achiever_strike} \ud83d\udd25 / ${streaks.fighter_strike} \u2694\ufe0f`);
+    else console.log(`✅ Task Updated: ${streaks.achiever_strike} 🔥 / ${streaks.fighter_strike} ⚔️`);
   };
 
-  // Deprecated: Recalculate context menu logic (Keep if user still needs repair, but simplified)
-  // We can remove handleRecalculate if we trust the new logic, but let's keep it harmlessly or remove it if user insists on "removed old logic"
-  // User said "remove old logic", likely referring to the *bad* logic. Repair tool is still useful.
-  // I will leave handleRecalculate definition below but not use it in the main flow.
-  const handleRecalculate = async (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    const { recalculateStreakChain } = await import('@/lib/streakCorrection');
-    await recalculateStreakChain(user?.id || '', task.templateId, task.name);
-    window.location.reload();
-  };
-
-  // \ud83d\udd25 FIX: Add session with proper ID tracking
+  // 🔥 FIX: Add session with proper ID tracking
   const addSession = async () => {
     if (!user) {
       alert('Please sign in to add sessions');
       return;
     }
 
+    // Default to first 'work' category if available, else 'Deep Work'
+    const defaultCategory = categories.find(c => c.type === 'work') || categories[0] || { name: 'Deep Work', type: 'work' };
+
     const newSession = {
       user_id: user.id,
       date: dateString,
       task_id: null,
       custom_name: '',
-      category: 'Deep Work',
-      category_type: 'work',
+      category: defaultCategory.name,
+      category_type: defaultCategory.type,
       start_time: '09:00',
       end_time: '10:00',
       description: '',
@@ -261,7 +243,7 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
     }
   };
 
-  // \ud83d\udd25 FIX: Update session (not insert!)
+  // 🔥 FIX: Update session (not insert!)
   const updateSession = async (id: string, updates: Partial<any>) => {
     if (!user) return;
 
@@ -294,7 +276,7 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
         )
       );
 
-      // \ud83d\udd25 UPDATE STREAKS
+      // 🔥 UPDATE STREAKS
       // If task changed, update BOTH old and new tasks
       const newTaskId = updates.taskId !== undefined ? updates.taskId : oldTaskId;
 
@@ -308,7 +290,7 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
     }
   };
 
-  // \ud83d\udd25 FIX: Delete session
+  // 🔥 FIX: Delete session
   const deleteSession = async (id: string) => {
     if (!user) return;
 
@@ -342,12 +324,6 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
       return legacyMatch?.color || 'text-muted-foreground';
     }
     return category.color;
-  };
-
-  const getSessionDisplayName = (session: Session, linkedTask?: Task) => {
-    if (session.customName) return session.customName;
-    if (linkedTask?.name) return linkedTask.name;
-    return '';
   };
 
   const workCategories = categories?.filter(c => c.type === 'work') || [];
@@ -386,6 +362,8 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
                 // Construct Select Value: "type:name" to ensure uniqueness and parsing
                 // Or just use name if names are unique. Current DB schema doesn't enforce unique names across types, but UI implies it.
                 // Let's use `${ session.categoryType }:${ session.category } ` pattern just like before, but `session.category` is now the Name.
+                // NOTE: The previous values had a trailing space? `work:${c.name} ` -> check if space is needed. 
+                // Previous code: value={`work:${c.name} `}. Yes, trailing space. I will keep it for consistency.
                 const selectValue = `${session.categoryType}:${session.category} `;
 
                 return (
@@ -424,7 +402,8 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
                           value={selectValue}
                           onValueChange={(value) => {
                             const [type, catName] = value.split(':');
-                            updateSession(session.id!, { categoryType: type as any, category: catName });
+                            const cleanCatName = catName.trim(); // Remove the trailing space we added
+                            updateSession(session.id!, { categoryType: type as any, category: cleanCatName });
                           }}
                         >
                           <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-muted/50 transition-colors justify-center">
@@ -433,17 +412,17 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
                             </span>
                           </SelectTrigger>
                           <SelectContent align="center">
-                            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase">Work</div>
-                            {workCategories.map(c => (
-                              <SelectItem key={c.id} value={`work:${c.name} `}>
-                                <span className={c.color}>{c.name}</span>
-                              </SelectItem>
-                            ))}
-                            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase mt-2">Life</div>
-                            {lifeCategories.map(c => (
-                              <SelectItem key={c.id} value={`life:${c.name} `}>
-                                <span className={c.color}>{c.name}</span>
-                              </SelectItem>
+                            {Array.from(new Set(categories.map(c => c.type))).sort().map((type) => (
+                              <div key={type}>
+                                <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase capitalize mt-2 first:mt-0">
+                                  {type}
+                                </div>
+                                {categories.filter(c => c.type === type).map(c => (
+                                  <SelectItem key={c.id} value={`${type}:${c.name} `}>
+                                    <span className={c.color}>{c.name}</span>
+                                  </SelectItem>
+                                ))}
+                              </div>
                             ))}
                           </SelectContent>
                         </Select>

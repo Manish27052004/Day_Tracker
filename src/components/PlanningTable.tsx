@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 // DISABLED for Cloud-Only mode
 // import { useLiveQuery } from 'dexie-react-hooks';
 // import { db, type Task, getDateString, calculateTaskProgress } from '@/lib/db';
-import { type Task, getDateString } from '@/lib/db';
+import { type Task, type Priority, getDateString } from '@/lib/db';
 import { calculateDuration } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,7 +53,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
   // === CLOUD-ONLY MODE ===
   const { user } = useAuth();
   const [tasks, setTasks] = useState<any[]>([]);
-  const [priorities, setPriorities] = useState<any[]>([]);
+  const [priorities, setPriorities] = useState<Priority[]>([]);
   /* 🔥 FIXED: Use NULL to distinguish "Loading" vs "No Sessions" */
   const [sessions, setSessions] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -244,19 +244,26 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
     updateProgressInDatabase();
   }, [tasks, sessions, user]);
 
-  // Fetch priorities from Supabase
+  // Fetch priorities from Supabase (Dynamic)
   useEffect(() => {
     const fetchPriorities = async () => {
-      // For now, use hardcoded priorities (or fetch from Supabase if you have a priorities table)
-      setPriorities([
-        { id: 1, name: 'Urgent & Important', color: 'bg-danger/10 text-danger border-danger/20', order: 1 },
-        { id: 2, name: 'Urgent & Not Important', color: 'bg-purple-500/10 text-purple-600 border-purple-500/20', order: 2 },
-        { id: 3, name: 'Not Urgent & Important', color: 'bg-success/10 text-success border-success/20', order: 3 },
-        { id: 4, name: 'Not Urgent & Not Important', color: 'bg-muted text-muted-foreground border-border', order: 4 }
-      ]);
+      if (!user) return;
+      const { data } = await supabase
+        .from('priorities')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order', { ascending: true });
+
+      if (data) setPriorities(data);
     };
     fetchPriorities();
-  }, []);
+
+    // Subscribe to changes? For now, just fetch on mount.
+    // Ideally we subscribe to realtime, but simplest is fetch on mount + refresh on settings close.
+    // Dialog handles refresh locally for itself, but not for this component unless we lift state.
+    // For now, user might need to refresh page if they change settings, OR we can listen to onOpenChange of settings.
+    // We can add a simple "refetch" prop or just refetch when settings closes.
+  }, [user, settingsOpen]); // Refetch when settings dialog closes
 
   // Streak calculation is now handled by PostgreSQL trigger
   // See: migrations/001_create_streak_trigger.sql
@@ -487,15 +494,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
             <AnimatePresence mode="popLayout">
               {tasks?.map((task, index) => {
                 // 🔍 DEBUG: Log task data
-                console.log('Task Data:', {
-                  id: task.id,
-                  name: task.name,
-                  progress: taskProgress[task.id],
-                  templateId: task.templateId,
-                  achieverStrike: task.achieverStrike,
-                  fighterStrike: task.fighterStrike,
-                  isRepeating: task.isRepeating
-                });
+                /* console.log('Task Data:', { ... }); */
 
                 return (
                   <motion.tr
@@ -577,13 +576,16 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
                         >
                           <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-muted/50 transition-colors justify-center">
                             <SelectValue>
-                              <PriorityTag priority={task.priority} />
+                              <PriorityTag
+                                priority={task.priority}
+                                color={priorities.find(p => p.name === task.priority)?.color}
+                              />
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent align="center">
                             {priorities?.map(p => (
                               <SelectItem key={p.id} value={p.name}>
-                                <PriorityTag priority={p.name} />
+                                <PriorityTag priority={p.name} color={p.color} />
                               </SelectItem>
                             ))}
                           </SelectContent>

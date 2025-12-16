@@ -81,7 +81,7 @@ interface GenerateChartDataParams {
     wakeTime?: string;
     bedTime?: string;
     viewMode: ViewMode;
-    categoryColors?: Record<string, string>;
+    categoryTypeMap?: Record<string, string>;
 }
 
 function parseTimeOnDate(timeStr: string, baseDate: Date): Date {
@@ -103,6 +103,7 @@ export function generateChartData({
     bedTime,
     viewMode,
     categoryColors = {},
+    categoryTypeMap = {},
 }: Omit<GenerateChartDataParams, 'dayStartTime'>): ChartSlice[] {
     // Step 1: Define chart boundaries (Strictly 00:00 to 24:00 of selected date)
     const chartStart = startOfDay(currentDate);
@@ -158,27 +159,10 @@ export function generateChartData({
             }
 
             // Clip logs to strictly fit within 00:00 - 24:00
-            // If a log started yesterday (e.g. 23:00 yesterday - 01:00 today), we only care about 00:00-01:00
-            // But strict `parseTimeOnDate` makes everything today.
-            // Let's rely on standard logic: if it's within the interval, show it.
-
-            // Check overlap
-            const chartInterval = { start: chartStart, end: chartEnd };
-
-            // We need to handle if logic placed the time on "Current Date" but it actually belongs to yesterday/tomorrow context?
-            // For now, assuming standard "Start Time/End Time" inputs refer to the current logical day or close to it.
-            // If user logged 23:00-01:00 on "Dec 15", they likely mean Dec 15 23:00 to Dec 16 01:00.
-            // Chart is Dec 15 00:00 - Dec 16 00:00.
-            // So we partially show 23:00-24:00?
-            // Actually, usually users log "What I did today".
-            // If they log 23:00-01:00 on Dec 15 context, we clip it to 23:00-24:00.
-
             if (isBefore(logStart, chartStart)) {
-                // started before today? (unlikely with parseTimeOnDate unless modified)
                 logStart = chartStart;
             }
 
-            // Re-check overlap with strict clipping
             const start = logStart < chartStart ? chartStart : logStart;
             const end = logEnd > chartEnd ? chartEnd : logEnd;
 
@@ -219,7 +203,18 @@ export function generateChartData({
                 key = slice.name;
                 break;
             case 'CATEGORY':
-                key = CATEGORY_TYPE_MAP[slice.category] || 'WORK';
+                // 🔥 FIX: Use dynamic map, defaulting to 'WORK' only if absolutely unknown
+                // If it's Sleep, force type 'LIFE' (or user defined)
+                if (slice.category === 'Sleep') {
+                    key = 'LIFE';
+                } else {
+                    key = categoryTypeMap[slice.category] || 'WORK'; // Fallback
+                }
+                // Uppercase for consistency if user typed "hobby" but wants "HOBBY" display?
+                // The user's screenshot had "WORK" and "LIFE" (uppercase).
+                // Let's assume the DB stores lowercase 'work'/'life' usually, but user might type 'Hobby'.
+                // Ideally we preserve user case or uppercase it. Let's UPPERCASE it for consistency with the screenshot.
+                key = key.toUpperCase();
                 break;
             case 'SUBCATEGORY':
                 key = slice.category;
