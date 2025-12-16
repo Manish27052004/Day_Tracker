@@ -134,7 +134,13 @@ const Index = () => {
       case 'execution':
         return <ExecutionTable selectedDate={selectedDate} />;
       case 'breakdown':
-        return <DailyBreakdown selectedDate={selectedDate} />;
+        return (
+          <DailyBreakdown
+            selectedDate={selectedDate}
+            wakeUpTime={sleepEntry?.wakeUpTime}
+            bedTime={sleepEntry?.bedTime}
+          />
+        );
       default:
         return null;
     }

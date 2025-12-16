@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { type Session, type Task, formatDuration, calculateDuration, getDateString, type Category } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { calculateStreakForTask } from '@/lib/streakCalculator'; // \ud83d\udd25 FIX
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,33 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+
+// Component to manage description field with local state
+const DescriptionInput = ({ sessionId, initialDescription, selectedDate, onUpdate }: { sessionId: string; initialDescription: string; selectedDate: Date; onUpdate: (id: string, updates: Partial<Session>) => void }) => {
+  const [description, setDescription] = useState(initialDescription || '');
+
+  // CRITICAL FIX: Sync local state when session changes (date navigation)
+  useEffect(() => {
+    setDescription(initialDescription || '');
+  }, [sessionId, initialDescription, selectedDate]);
+
+  const handleBlur = () => {
+    if (description !== initialDescription) {
+      onUpdate(sessionId, { description });
+    }
+  };
+
+  return (
+    <Textarea
+      value={description}
+      onChange={(e) => setDescription(e.target.value)}
+      onBlur={handleBlur}
+      placeholder="What did you accomplish?"
+      className="ghost-input min-h-[32px] text-xs resize-none"
+      rows={1}
+    />
+  );
+};
 
 interface ExecutionTableProps {
   selectedDate: Date;
@@ -86,7 +114,8 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
         setTasks(data.map(t => ({
           id: t.id,
           name: t.name,
-          targetTime: t.target_time
+          targetTime: t.target_time,
+          templateId: t.template_id // \ud83d\udd25 NEW: Needed for streak calculation
         })));
       }
     };
@@ -108,6 +137,81 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
     };
     fetchCategories();
   }, []);
+
+  // ... (remove this line)
+
+  // ... (existing helper function: calculateDuration)
+
+  // Inside ExecutionTable component:
+
+  // \ud83d\udd25 FIX: Client-Side Streak Calculation & Task Update
+  const updateTaskProgress = async (taskId: string) => {
+    if (!taskId || !user) return;
+
+    // 1. Calculate total duration from ALL sessions for this task
+    // Note: We use the *updated* sessions state.
+    // However, setSessions is async, so we might need to rely on the fetched data or pass the new session list.
+    // For simplicity, we'll fetch the latest sessions from Supabase to be safe, 
+    // OR we can calculate from the current `sessions` state if we assume it's up to date (optimistic).
+    // Let's use the local 'sessions' state but filtering carefully.
+
+    // Better: Fetch fresh sessions to ensure accuracy before writing to 'tasks'
+    const { data: taskSessions } = await supabase
+      .from('sessions')
+      .select('start_time, end_time')
+      .eq('task_id', taskId)
+      .eq('date', dateString)
+      .eq('user_id', user.id);
+
+    if (!taskSessions) return;
+
+    const totalMinutes = taskSessions.reduce((sum, s) => sum + calculateDuration(s.start_time, s.end_time), 0);
+
+    // 2. Get Task details (Target Time & Template ID)
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const progressPercent = task.targetTime > 0
+      ? Math.round((totalMinutes / task.targetTime) * 100)
+      : 0;
+
+    console.log(`\u267b\ufe0f Syncing Task ${taskId}: ${totalMinutes}m / ${task.targetTime}m = ${progressPercent}%`);
+
+    // 3. Calculate Streak (Client-Side)
+    const streaks = await calculateStreakForTask(
+      user.id,
+      task.templateId,
+      dateString,
+      progressPercent,
+      task.name
+    );
+
+    // 4. Update Task in DB
+    const { error } = await supabase
+      .from('tasks')
+      .update({
+        progress: progressPercent,
+        achiever_strike: streaks.achiever_strike,
+        fighter_strike: streaks.fighter_strike,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', taskId);
+
+    if (error) console.error('Error updating task progress:', error);
+    else console.log(`\u2705 Task Updated: ${streaks.achiever_strike} \ud83d\udd25 / ${streaks.fighter_strike} \u2694\ufe0f`);
+  };
+
+  // Deprecated: Recalculate context menu logic (Keep if user still needs repair, but simplified)
+  // We can remove handleRecalculate if we trust the new logic, but let's keep it harmlessly or remove it if user insists on "removed old logic"
+  // User said "remove old logic", likely referring to the *bad* logic. Repair tool is still useful.
+  // I will leave handleRecalculate definition below but not use it in the main flow.
+  const handleRecalculate = async (taskId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const { recalculateStreakChain } = await import('@/lib/streakCorrection');
+    await recalculateStreakChain(user?.id || '', task.templateId, task.name);
+    window.location.reload();
+  };
 
   // \ud83d\udd25 FIX: Add session with proper ID tracking
   const addSession = async () => {
@@ -151,12 +255,19 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
         endTime: insertedData.end_time,
         description: insertedData.description || ''
       }]);
+
+      // Update task if linked (though usually null on creation)
+      if (insertedData.task_id) updateTaskProgress(insertedData.task_id);
     }
   };
 
   // \ud83d\udd25 FIX: Update session (not insert!)
   const updateSession = async (id: string, updates: Partial<any>) => {
     if (!user) return;
+
+    // Find the session before update to know previous Task ID (if changing tasks)
+    const oldSession = sessions.find(s => s.id === id);
+    const oldTaskId = oldSession?.taskId;
 
     const supabaseUpdates: any = {};
     if (updates.taskId !== undefined) supabaseUpdates.task_id = updates.taskId;
@@ -182,12 +293,26 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
           s.id === id ? { ...s, ...updates } : s
         )
       );
+
+      // \ud83d\udd25 UPDATE STREAKS
+      // If task changed, update BOTH old and new tasks
+      const newTaskId = updates.taskId !== undefined ? updates.taskId : oldTaskId;
+
+      if (oldTaskId && oldTaskId !== newTaskId) {
+        await updateTaskProgress(oldTaskId);
+      }
+      if (newTaskId) {
+        // Add small delay to ensure Supabase read consistency if we are reading back sessions
+        setTimeout(() => updateTaskProgress(newTaskId), 500);
+      }
     }
   };
 
   // \ud83d\udd25 FIX: Delete session
   const deleteSession = async (id: string) => {
     if (!user) return;
+
+    const session = sessions.find(s => s.id === id); // Get task ID before delete
 
     const { error } = await supabase
       .from('sessions')
@@ -200,6 +325,11 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
     } else {
       // Remove from UI
       setSessions(prev => prev.filter(s => s.id !== id));
+
+      // Update Task
+      if (session?.taskId) {
+        setTimeout(() => updateTaskProgress(session.taskId), 500);
+      }
     }
   };
 
@@ -353,12 +483,11 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
 
                     {/* Notes */}
                     <td className="min-w-[300px] px-4 py-3">
-                      <Textarea
-                        value={session.description}
-                        onChange={(e) => updateSession(session.id!, { description: e.target.value })}
-                        placeholder="What did you accomplish?"
-                        className="ghost-input min-h-[32px] text-xs resize-none"
-                        rows={1}
+                      <DescriptionInput
+                        sessionId={session.id!}
+                        initialDescription={session.description || ''}
+                        selectedDate={selectedDate}
+                        onUpdate={updateSession}
                       />
                     </td>
 

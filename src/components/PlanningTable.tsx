@@ -31,6 +31,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { cn } from '@/lib/utils';
 
 interface PlanningTableProps {
@@ -48,7 +54,8 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<any[]>([]);
   const [priorities, setPriorities] = useState<any[]>([]);
-  const [sessions, setSessions] = useState<any[]>([]); // 🔥 NEW: Fetch sessions for progress calculation
+  /* 🔥 FIXED: Use NULL to distinguish "Loading" vs "No Sessions" */
+  const [sessions, setSessions] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch tasks from Supabase only
@@ -56,11 +63,13 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
     const fetchTasks = async () => {
       if (!user) {
         setTasks([]);
+        setSessions(null); // Clear sessions
         setLoading(false);
         return;
       }
 
       setLoading(true);
+      setSessions(null); // 🔥 CRITICAL: Lock updates until new sessions arrive
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
@@ -112,14 +121,25 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       .eq('date', dateString)
       .eq('user_id', user.id);
 
-    if (!error && data) {
+    if (error) {
+      console.error("🚨 CRITICAL: Failed to fetch sessions. Aborting update to prevent data loss.", error);
+      // Do not setSessions([]). Leave it as null to block the progress calculator!
+      return;
+    }
+
+    if (data) {
+      console.log(`   📦 Loaded ${data.length} sessions for ${dateString}`);
       setSessions(data);
+    } else {
+      setSessions([]);
     }
   };
 
   // 🔥 Calculate progress from sessions AND save to database
   useEffect(() => {
-    if (!tasks.length || !sessions.length || !user) return;
+    // 🛑 STOP: If sessions is NULL, it means we are still loading. Do NOT calculate.
+    // If sessions is [], it means loaded but empty (valid 0%).
+    if (!tasks.length || sessions === null || !user) return;
 
     const updateProgressInDatabase = async () => {
       const progressMap: Record<string, number> = {};
@@ -142,21 +162,36 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
         progressMap[task.id] = progressPercent;
 
         // 🔥 CLIENT-SIDE STREAK CALCULATION
-        if (progressPercent !== task.progress) {
-          // 1. Calculate streaks using our client-side logic
-          const { calculateStreakForTask } = await import('@/lib/streakCalculator');
+        const { calculateStreakForTask } = await import('@/lib/streakCalculator');
 
-          const streaks = await calculateStreakForTask(
-            user.id,
-            task.templateId, // FIX: Use camelCase property name
-            task.date,
-            progressPercent
-            // min_target is fetched from the template inside the calculator
-          );
+        const streaks = await calculateStreakForTask(
+          user.id,
+          task.templateId,
+          task.date,
+          progressPercent,
+          task.name
+        );
 
-          console.log(`✅ Calculated for ${task.name}: progress=${progressPercent}%, achiever=${streaks.achiever_strike}, fighter=${streaks.fighter_strike}`);
+        // Check if we need to update in DB
+        // 1. Progress changed locally vs DB
+        const progressChanged = progressPercent !== task.progress;
+        // 2. Streak changed (Staleness Check) - e.g., yesterday was updated
+        const streakChanged =
+          streaks.achiever_strike !== task.achieverStrike ||
+          streaks.fighter_strike !== task.fighterStrike;
 
-          // 2. Optimistic UI update (instant feedback)
+        // 🚨 SAFETY GUARD: If progress is dropping from >0 to 0 AUTOMATICALLY, it's likely a bug.
+        const isDangerousDrop = task.progress > 0 && progressPercent === 0;
+
+        if (isDangerousDrop) {
+          console.warn(`🛑 PREVENTED AUTO-RESET: Task '${task.name}' 100% -> 0%. Keeping ${task.progress}%.`);
+          continue;
+        }
+
+        if (progressChanged || streakChanged) {
+          // console.log(`♻️ Syncing task ${task.id}...`);
+
+          // 2. Optimistic UI update
           setTasks((prevTasks) =>
             prevTasks.map((t) =>
               t.id === task.id
@@ -171,8 +206,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
           );
 
           // 3. Save to database with calculated values
-          // 3. Save to database with calculated values
-          const { data: updatedData, error: updateError } = await supabase
+          const { error: updateError } = await supabase
             .from('tasks')
             .update({
               progress: progressPercent,
@@ -181,8 +215,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
               updated_at: new Date().toISOString()
             })
             .eq('id', task.id)
-            .eq('user_id', user.id)
-            .select();
+            .eq('user_id', user.id);
 
           if (updateError) {
             console.error('❌ Database UPDATE FAILED:', updateError);
@@ -192,7 +225,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
                 t.id === task.id
                   ? {
                     ...t,
-                    progress: task.progress, // Revert to old progress
+                    progress: task.progress,
                     achieverStrike: task.achieverStrike,
                     fighterStrike: task.fighterStrike
                   }
@@ -200,14 +233,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
               )
             );
           } else {
-            // Success - optimistic update already applied
-            // Just log casually for dev verification if needed
-            const rowsUpdated = updatedData ? updatedData.length : 0;
-            if (rowsUpdated === 0) {
-              console.warn('⚠️ Saved to DB but 0 rows updated (potential ID mismatch)');
-            } else {
-              console.log(`✅ Saved: ${streaks.achiever_strike}/${streaks.fighter_strike}`);
-            }
+            // success silently
           }
         }
       }
@@ -414,6 +440,21 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
 
   // Removed incrementStrike function - strike_count column no longer exists
 
+  const handleRecalculateStreak = async (task: any) => {
+    const confirmed = window.confirm(`Recalculate entire streak history for "${task.name}"? This will fix gaps in history.`);
+    if (!confirmed) return;
+
+    try {
+      const { recalculateStreakChain } = await import('@/lib/streakCorrection');
+      await recalculateStreakChain(user?.id || '', task.templateId, task.name);
+      alert('Recalculation complete. Refreshing...');
+      window.location.reload();
+    } catch (e) {
+      console.error('Recalculation failed', e);
+      alert('Failed to recalculate');
+    }
+  };
+
   return (
     <motion.div
       className="notion-card overflow-hidden w-full space-y-4"
@@ -467,35 +508,44 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
                     className="hover:bg-muted/20 transition-colors group"
                   >
                     {/* Strike - Sticky Left 0 */}
-                    <td className="w-[80px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
-                      <div className="flex flex-col items-center gap-1">
-                        {/* Display strikes directly from database (calculated by PostgreSQL trigger) */}
-                        {task.achieverStrike === 0 && task.fighterStrike === 0 ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : (
-                          <div className="flex flex-col gap-1">
-                            {/* Achiever Strike */}
-                            {task.achieverStrike > 0 && (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-base">🔥</span>
-                                <span className="text-sm font-semibold text-orange-600">
-                                  {task.achieverStrike}
-                                </span>
-                              </div>
-                            )}
+                    <td className="w-[80px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3 cursor-context-menu">
+                      <ContextMenu>
+                        <ContextMenuTrigger>
+                          <div className="flex flex-col items-center gap-1 h-full w-full justify-center min-h-[24px]">
+                            {/* Display strikes directly from database */}
+                            {task.achieverStrike === 0 && task.fighterStrike === 0 ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                {/* Achiever Strike */}
+                                {task.achieverStrike > 0 && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-base">🔥</span>
+                                    <span className="text-sm font-semibold text-orange-600">
+                                      {task.achieverStrike}
+                                    </span>
+                                  </div>
+                                )}
 
-                            {/* Fighter Strike */}
-                            {task.fighterStrike > 0 && (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-base">⚔️</span>
-                                <span className="text-sm font-bold bg-gradient-to-r from-yellow-500 to-orange-600 bg-clip-text text-transparent">
-                                  {task.fighterStrike}
-                                </span>
+                                {/* Fighter Strike */}
+                                {task.fighterStrike > 0 && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-base">⚔️</span>
+                                    <span className="text-sm font-bold bg-gradient-to-r from-yellow-500 to-orange-600 bg-clip-text text-transparent">
+                                      {task.fighterStrike}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem onClick={() => handleRecalculateStreak(task)}>
+                            Recalculate History
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     </td>
 
                     {/* Task Name - Sticky Left 80px */}

@@ -34,9 +34,10 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
     const [selectedTemplate, setSelectedTemplate] = useState<RepeatingTask | undefined>();
     const [editingTemplate, setEditingTemplate] = useState<RepeatingTask | undefined>();
 
-    // Fetch all templates
+    // Fetch all templates (Cross-compatible with Cloud if we migrate)
     const templates = useLiveQuery(
         async () => {
+            if (!db.repeatingTasks) return [];
             const allTasks = await db.repeatingTasks.toArray();
             return allTasks.filter(t => t.isActive);
         },
@@ -89,7 +90,7 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
 
     const handleTemplateClick = async (template: RepeatingTask | null) => {
         if (onTemplateSelect) {
-            await onTemplateSelect(template as any);
+            await onTemplateSelect(template);
         }
         setOpen(false);
     };
@@ -136,7 +137,6 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem
                                     onClick={() => handleSetDefault({
-                                        id: 0,
                                         name: 'Empty',
                                         priority: 'normal',
                                         targetTime: 60,
@@ -146,6 +146,10 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
                                         isActive: true,
                                         isDefault: true,
                                         createdAt: new Date(),
+                                        // Fix: Add missing gamification fields
+                                        minCompletionTarget: 60,
+                                        achieverStrike: 0,
+                                        fighterStrike: 0,
                                     })}
                                 >
                                     <Flag className="h-4 w-4 mr-2" />

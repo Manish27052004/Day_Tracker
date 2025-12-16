@@ -78,7 +78,6 @@ function getSessionColor(sessionName: string, index: number): string {
 interface GenerateChartDataParams {
     logs: LogEntry[];
     currentDate: Date;
-    dayStartTime?: string;
     wakeTime?: string;
     bedTime?: string;
     viewMode: ViewMode;
@@ -100,53 +99,48 @@ function parseTimeOnDate(timeStr: string, baseDate: Date): Date {
 export function generateChartData({
     logs,
     currentDate,
-    dayStartTime = '04:00',
     wakeTime,
     bedTime,
     viewMode,
     categoryColors = {},
-}: GenerateChartDataParams): ChartSlice[] {
-    // Step 1: Define chart boundaries
-    const chartStart = parseTimeOnDate(dayStartTime, currentDate);
+}: Omit<GenerateChartDataParams, 'dayStartTime'>): ChartSlice[] {
+    // Step 1: Define chart boundaries (Strictly 00:00 to 24:00 of selected date)
+    const chartStart = startOfDay(currentDate);
     const chartEnd = addHours(chartStart, 24);
 
     const slices: Array<{ name: string; category: string; start: Date; end: Date }> = [];
 
-    // Step 2: Generate virtual sleep slices (NEW LOGIC: Calendar Day Only)
-    // Sleep is calculated within the SAME calendar day (00:00 to 23:59)
-    // NOT based on dayStartTime or spanning across days
-    if (wakeTime && bedTime) {
-        try {
-            // Calendar day boundaries (NOT chart boundaries)
-            const calendarDayStart = startOfDay(currentDate); // 00:00:00
-            const calendarDayEnd = addHours(calendarDayStart, 24); // 23:59:59 (next day 00:00)
-
-            // Parse wake and bed times on the CURRENT CALENDAR DAY
+    // Step 2: Generate virtual sleep slices (Calendar Day Only)
+    try {
+        // Morning sleep: 00:00 → wakeTime
+        if (wakeTime) {
             const wakeDateTime = parseTimeOnDate(wakeTime, currentDate);
-            const bedDateTime = parseTimeOnDate(bedTime, currentDate);
-
-            // Morning sleep: 00:00 → wakeTime (if wake time is within the day)
-            if (isAfter(wakeDateTime, calendarDayStart) && isBefore(wakeDateTime, calendarDayEnd)) {
+            // Only add if wake time is after midnight
+            if (isAfter(wakeDateTime, chartStart) && isBefore(wakeDateTime, chartEnd)) {
                 slices.push({
                     name: 'Sleep',
                     category: 'Sleep',
-                    start: calendarDayStart,
+                    start: chartStart,
                     end: wakeDateTime,
                 });
             }
+        }
 
-            // Night sleep: bedTime → 23:59:59 (if bed time is within the day)
-            if (isAfter(bedDateTime, calendarDayStart) && isBefore(bedDateTime, calendarDayEnd)) {
+        // Night sleep: bedTime → 24:00
+        if (bedTime) {
+            const bedDateTime = parseTimeOnDate(bedTime, currentDate);
+            // Only add if bed time is before midnight end
+            if (isAfter(bedDateTime, chartStart) && isBefore(bedDateTime, chartEnd)) {
                 slices.push({
                     name: 'Sleep',
                     category: 'Sleep',
                     start: bedDateTime,
-                    end: calendarDayEnd,
+                    end: chartEnd,
                 });
             }
-        } catch (error) {
-            console.error('Error generating sleep slices:', error);
         }
+    } catch (error) {
+        console.error('Error generating sleep slices:', error);
     }
 
     // Step 3: Process real logs
@@ -157,40 +151,46 @@ export function generateChartData({
             let logStart = parseTimeOnDate(log.startTime, currentDate);
             let logEnd = parseTimeOnDate(log.endTime, currentDate);
 
-            // If end time is before start time, it spans midnight
+            // SPECIAL CASE: Overnight tasks (e.g., 23:00 - 01:00)
+            // If end is before start, it implies it crosses midnight
             if (isBefore(logEnd, logStart)) {
                 logEnd = addHours(logEnd, 24);
             }
 
-            // Try to align log with chart boundaries
-            // If log starts way before chart start, shift it by 24h
-            const hoursDiff = differenceInMinutes(chartStart, logStart) / 60;
-            if (hoursDiff > 12) {
-                logStart = addHours(logStart, 24);
-                logEnd = addHours(logEnd, 24);
-            }
+            // Clip logs to strictly fit within 00:00 - 24:00
+            // If a log started yesterday (e.g. 23:00 yesterday - 01:00 today), we only care about 00:00-01:00
+            // But strict `parseTimeOnDate` makes everything today.
+            // Let's rely on standard logic: if it's within the interval, show it.
 
-            // Check if log overlaps with chart interval
+            // Check overlap
             const chartInterval = { start: chartStart, end: chartEnd };
 
-            const startsInRange = isWithinInterval(logStart, chartInterval);
-            const endsInRange = isWithinInterval(logEnd, chartInterval);
-            const spansChart = isBefore(logStart, chartStart) && isAfter(logEnd, chartEnd);
+            // We need to handle if logic placed the time on "Current Date" but it actually belongs to yesterday/tomorrow context?
+            // For now, assuming standard "Start Time/End Time" inputs refer to the current logical day or close to it.
+            // If user logged 23:00-01:00 on "Dec 15", they likely mean Dec 15 23:00 to Dec 16 01:00.
+            // Chart is Dec 15 00:00 - Dec 16 00:00.
+            // So we partially show 23:00-24:00?
+            // Actually, usually users log "What I did today".
+            // If they log 23:00-01:00 on Dec 15 context, we clip it to 23:00-24:00.
 
-            if (startsInRange || endsInRange || spansChart) {
-                // Clip to chart boundaries
-                const clippedStart = isBefore(logStart, chartStart) ? chartStart : logStart;
-                const clippedEnd = isAfter(logEnd, chartEnd) ? chartEnd : logEnd;
-
-                if (isBefore(clippedStart, clippedEnd)) {
-                    slices.push({
-                        name: log.customName || `Task ${log.taskId}` || 'Unnamed',
-                        category: log.category,
-                        start: clippedStart,
-                        end: clippedEnd,
-                    });
-                }
+            if (isBefore(logStart, chartStart)) {
+                // started before today? (unlikely with parseTimeOnDate unless modified)
+                logStart = chartStart;
             }
+
+            // Re-check overlap with strict clipping
+            const start = logStart < chartStart ? chartStart : logStart;
+            const end = logEnd > chartEnd ? chartEnd : logEnd;
+
+            if (start < end) {
+                slices.push({
+                    name: log.customName || `Task ${log.taskId}` || 'Unnamed',
+                    category: log.category,
+                    start: start,
+                    end: end,
+                });
+            }
+
         } catch (error) {
             console.error('Error processing log:', log, error);
         }

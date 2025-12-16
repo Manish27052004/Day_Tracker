@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { format, subDays, parseISO } from 'date-fns';
+import { format, subDays, parseISO, isBefore } from 'date-fns';
 
 interface StreakResult {
     achiever_strike: number;
@@ -7,139 +7,157 @@ interface StreakResult {
 }
 
 /**
- * SIMPLE AND EXPLICIT streak calculator
- * Logs EVERYTHING so we can debug
+ * ROBUST HISTORY-BASED STREAK CALCULATOR
+ * Fetches last 50 days of history to calculate streaks from raw progress data.
+ * This solves the "Gap Problem" (e.g. 13 -> 15) by not relying on potentially stale
+ * stored streak values of previous days.
  */
 export async function calculateStreakForTask(
     userId: string,
     templateId: string | null,
     currentDate: string,
-    currentProgress: number
+    currentProgress: number,
+    taskName: string | null
 ): Promise<StreakResult> {
 
     console.log('='.repeat(60));
-    console.log('🚀 STREAK CALCULATOR START');
+    console.log('🚀 ROBUST HISTORY CALCULATOR v3 (Strict Dates)');
     console.log(`   userId: ${userId}`);
     console.log(`   templateId: ${templateId}`);
     console.log(`   currentDate: ${currentDate}`);
-    console.log(`   currentProgress: ${currentProgress}%`);
 
-    // If no template, no streak
-    if (!templateId) {
-        console.log('❌ NO TEMPLATE ID - returning 0/0');
+    if (!templateId && !taskName) {
         return { achiever_strike: 0, fighter_strike: 0 };
     }
 
     try {
-        // 1. Fetch template's min_completion_target
-        console.log('\n📌 Step 1: Fetching template settings...');
-        const { data: templateData, error: templateError } = await supabase
-            .from('repeating_tasks')
-            .select('min_completion_target')
-            .eq('id', templateId)
-            .single();
-
-        if (templateError) {
-            console.error('❌ Template fetch error:', templateError);
-            console.log('   Using default min_target = 60%');
+        // 1. Fetch Template Settings (Min Target)
+        let minTarget = 60;
+        if (templateId) {
+            const { data } = await supabase
+                .from('repeating_tasks')
+                .select('min_completion_target')
+                .eq('id', templateId)
+                .maybeSingle(); // <--- SAFE: Returns null if not found (instead of 406 Error)
+            if (data) minTarget = data.min_completion_target;
         }
+        console.log(`   🎯 Target: ${minTarget}% | Fighter: >100%`);
 
-        const minTarget = templateData?.min_completion_target ?? 60;
-        console.log(`   ✅ Min target: ${minTarget}%`);
+        // 2. Fetch History Batch (Last 50 Records)
+        // We look for anything strictly BEFORE today.
+        console.log('   📚 Fetching history batch...');
 
-        // 2. Calculate yesterday's date
-        console.log('\n📅 Step 2: Calculating yesterday...');
-        const yesterday = subDays(parseISO(currentDate), 1);
-        const yesterdayDate = format(yesterday, 'yyyy-MM-dd');
-        console.log(`   Current: ${currentDate}`);
-        console.log(`   Yesterday: ${yesterdayDate}`);
-
-        // 3. Fetch yesterday's task
-        console.log('\n🔍 Step 3: Fetching yesterday\'s task...');
-        console.log(`   Query: user_id=${userId}, template_id=${templateId}, date=${yesterdayDate}`);
-
-        const { data: yesterdayTask, error: fetchError } = await supabase
+        let query = supabase
             .from('tasks')
-            .select('achiever_strike, fighter_strike, progress, date, template_id')
+            .select('date, progress, status')
             .eq('user_id', userId)
-            .eq('template_id', templateId)
-            .eq('date', yesterdayDate)
-            .maybeSingle();
+            .lt('date', currentDate)
+            .order('date', { ascending: false }) // Newest (yesterday) first
+            .limit(365); // Cap at 1 year history for performance (still very fast)
 
-        if (fetchError) {
-            console.error('❌ Fetch error:', fetchError);
-            console.log('   Starting fresh: 1/0 or 0/0');
+        if (templateId) {
+            query = query.eq('template_id', templateId);
+        } else if (taskName) {
+            query = query.eq('name', taskName);
+        }
+
+        const { data: history, error } = await query;
+
+        if (error) {
+            console.error('   ❌ History fetch error:', error);
             return calculateFreshStreak(currentProgress, minTarget);
         }
 
-        if (!yesterdayTask) {
-            console.log('   ℹ️ No yesterday task found');
-            console.log('   Starting fresh streak');
-            return calculateFreshStreak(currentProgress, minTarget);
-        }
+        console.log(`   📜 Found ${history?.length || 0} past records.`);
 
-        console.log('   ✅ Yesterday task found!');
-        console.log(`   Raw data:`, yesterdayTask);
+        // 3. Walk backwards strictly
+        let achieverBase = 0;
+        let fighterBase = 0;
 
-        // 4. VALIDATE yesterday based on yesterday's progress
-        console.log('\n🔬 Step 4: Validating yesterday\'s strikes...');
+        let achieverAlive = true;
+        let fighterAlive = true;
 
-        let baseAchiever = yesterdayTask.achiever_strike || 0;
-        let baseFighter = yesterdayTask.fighter_strike || 0;
-        const yesterdayProgress = yesterdayTask.progress || 0;
+        // STRICT DATE SETUP
+        // Use parseISO to ensure we parse the input string 'YYYY-MM-DD' correctly without timezone shifts
+        const currentParsed = parseISO(currentDate);
+        // Calculate Yesterday strictly
+        const yesterdayObj = subDays(currentParsed, 1);
+        const yesterdayStr = format(yesterdayObj, 'yyyy-MM-dd');
 
-        console.log(`   Yesterday's raw strikes: achiever=${baseAchiever}, fighter=${baseFighter}`);
-        console.log(`   Yesterday's progress: ${yesterdayProgress}%`);
+        console.log(`   🕵️ LOOKING FOR YESTERDAY: ${yesterdayStr}`);
 
-        // Validate Achiever
-        if (yesterdayProgress < minTarget) {
-            console.log(`   ⚠️ Yesterday FAILED achiever (${yesterdayProgress}% < ${minTarget}%)`);
-            console.log(`   Resetting achiever base: ${baseAchiever} → 0`);
-            baseAchiever = 0;
+        let expectedDateObj = yesterdayObj;
+        const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
+
+        if (history && history.length > 0) {
+            let visitedDays = 0;
+
+            for (const task of history) {
+                const expectedDateStr = fmt(expectedDateObj);
+                const taskDate = task.date; // Should be YYYY-MM-DD from DB
+                const progress = task.progress || 0;
+
+                // Stop if both chains are dead
+                if (!achieverAlive && !fighterAlive) break;
+
+                // CHECK DATE CONTINUITY
+                // We compare the Task Date vs The Expected Date
+                const isMatch = taskDate === expectedDateStr;
+
+                if (visitedDays === 0) {
+                    // First iteration: This MUST be yesterday for the streak to continue immediately
+                    console.log(`   🔎 Checking Most Recent History: Is '${taskDate}' == Yesterday '${yesterdayStr}'? ${isMatch ? 'YES' : 'NO'}`);
+                }
+
+                if (!isMatch) {
+                    console.log(`   💔 Gap encountered: Expected ${expectedDateStr}, found ${taskDate}`);
+                    // A gap means the streak breaks
+                    achieverAlive = false;
+                    fighterAlive = false;
+                    break;
+                }
+
+                // CHECK ACHIEVER
+                if (achieverAlive) {
+                    if (progress >= minTarget) {
+                        achieverBase++;
+                    } else {
+                        achieverAlive = false; // Progress too low
+                    }
+                }
+
+                // CHECK FIGHTER
+                if (fighterAlive) {
+                    if (progress > 100) {
+                        fighterBase++;
+                    } else {
+                        fighterAlive = false;
+                    }
+                }
+
+                // Decrement expected date for next loop
+                expectedDateObj = subDays(expectedDateObj, 1);
+                visitedDays++;
+            }
         } else {
-            console.log(`   ✅ Yesterday ACHIEVED (${yesterdayProgress}% >= ${minTarget}%)`);
-            console.log(`   Keeping achiever base: ${baseAchiever}`);
+            console.log('   ⚠️ No history found at all.');
         }
 
-        // Validate Fighter
-        if (yesterdayProgress <= 100) {
-            console.log(`   ⚠️ Yesterday NOT fighter (${yesterdayProgress}% <= 100%)`);
-            console.log(`   Resetting fighter base: ${baseFighter} → 0`);
-            baseFighter = 0;
-        } else {
-            console.log(`   ✅ Yesterday WAS fighter (${yesterdayProgress}% > 100%)`);
-            console.log(`   Keeping fighter base: ${baseFighter}`);
-        }
+        console.log(`   🏗️ Calculated Base Streaks: Achiever=${achieverBase}, Fighter=${fighterBase}`);
 
-        // 5. Calculate today's increment
-        console.log('\n➕ Step 5: Calculating today\'s increment...');
-        console.log(`   Validated base: achiever=${baseAchiever}, fighter=${baseFighter}`);
-        console.log(`   Today's progress: ${currentProgress}%`);
-
-        let finalAchiever = baseAchiever;
-        let finalFighter = baseFighter;
+        // 4. Add Today's contribution
+        let finalAchiever = achieverBase;
+        let finalFighter = fighterBase;
 
         if (currentProgress >= minTarget) {
-            finalAchiever = baseAchiever + 1;
-            console.log(`   ✅ Today ACHIEVES (${currentProgress}% >= ${minTarget}%)`);
-            console.log(`   Achiever: ${baseAchiever} + 1 = ${finalAchiever}`);
-        } else {
-            console.log(`   ❌ Today FAILS (${currentProgress}% < ${minTarget}%)`);
-            console.log(`   Achiever: keeps base = ${finalAchiever}`);
+            finalAchiever += 1;
         }
 
         if (currentProgress > 100) {
-            finalFighter = baseFighter + 1;
-            console.log(`   ✅ Today is FIGHTER (${currentProgress}% > 100%)`);
-            console.log(`   Fighter: ${baseFighter} + 1 = ${finalFighter}`);
-        } else {
-            console.log(`   ❌ Today NOT fighter (${currentProgress}% <= 100%)`);
-            console.log(`   Fighter: keeps base = ${finalFighter}`);
+            finalFighter += 1;
         }
 
-        console.log('\n🎯 FINAL RESULT:');
-        console.log(`   achiever_strike = ${finalAchiever}`);
-        console.log(`   fighter_strike = ${finalFighter}`);
+        console.log(`   🎯 Final Result: ${finalAchiever} / ${finalFighter}`);
         console.log('='.repeat(60));
 
         return {
@@ -149,21 +167,10 @@ export async function calculateStreakForTask(
 
     } catch (error) {
         console.error('💥 UNEXPECTED ERROR:', error);
-        console.log('Falling back to fresh streak');
         return calculateFreshStreak(currentProgress, 60);
     }
 }
 
-function calculateFreshStreak(
-    currentProgress: number,
-    minTarget: number
-): StreakResult {
-    console.log('\n🆕 Calculating FRESH streak (no yesterday)');
-    const achiever = currentProgress >= minTarget ? 1 : 0;
-    const fighter = currentProgress > 100 ? 1 : 0;
-    console.log(`   Result: achiever=${achiever}, fighter=${fighter}`);
-    return {
-        achiever_strike: achiever,
-        fighter_strike: fighter
-    };
+function calculateFreshStreak(p: number, t: number) {
+    return { achiever_strike: p >= t ? 1 : 0, fighter_strike: p > 100 ? 1 : 0 };
 }

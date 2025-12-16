@@ -1,16 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Session } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import TimePicker from '@/components/TimePicker';
 import { generateChartData, formatMinutesToHours, type ViewMode, type LogEntry } from '@/utils/chartLogic';
 import { cn } from '@/lib/utils';
+import { getDateString } from '@/lib/db';
 
 interface DailyBreakdownProps {
     selectedDate: Date;
+    wakeUpTime?: string;
+    bedTime?: string;
 }
 
 // Default color mappings
@@ -27,48 +29,101 @@ const DEFAULT_COLORS: Record<string, string> = {
     'Untracked': '#e5e7eb',
 };
 
-const DailyBreakdown = ({ selectedDate }: DailyBreakdownProps) => {
-    const [dayStartTime, setDayStartTime] = useState('04:00');
+const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownProps) => {
+    const { user } = useAuth();
     const [viewMode, setViewMode] = useState<ViewMode>('CATEGORY');
 
-    const dateString = selectedDate.toISOString().split('T')[0];
+    // Cloud Data State
+    const [sessions, setSessions] = useState<any[]>([]);
+    const [tasks, setTasks] = useState<any[]>([]);
+    // Sleep Entry removed in favor of props
+    const [categories, setCategories] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    // Fetch sessions for the selected date
-    const sessions = useLiveQuery(
-        () => db.sessions.where('date').equals(dateString).filter(s => !s.isDeleted).toArray(),
-        [dateString]
-    );
+    const dateString = getDateString(selectedDate);
 
-    // Fetch sleep entry for the selected date
-    const sleepEntry = useLiveQuery(
-        () => db.sleepEntries.where('date').equals(dateString).first(),
-        [dateString]
-    );
+    // Fetch All Data from Supabase
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!user) return;
+            setLoading(true);
 
-    // Fetch categories for color mapping
-    const categories = useLiveQuery(() => db.categories.toArray());
+            try {
+                // 1. Fetch Sessions
+                const { data: sessionsData } = await supabase
+                    .from('sessions')
+                    .select('*')
+                    .eq('date', dateString)
+                    .eq('user_id', user.id);
 
-    // Fetch tasks for the selected date to get task names
-    const tasks = useLiveQuery(
-        () => db.tasks.where('date').equals(dateString).toArray(),
-        [dateString]
-    );
+                // 2. Fetch Tasks (for naming)
+                const { data: tasksData } = await supabase
+                    .from('tasks')
+                    .select('*')
+                    .eq('date', dateString)
+                    .eq('user_id', user.id);
+
+                // 3. Fetch Categories (Global)
+                const { data: categoriesData } = await supabase
+                    .from('categories')
+                    .select('*')
+                    .eq('user_id', user.id);
+
+                if (sessionsData) {
+                    // Normalize session data structure
+                    setSessions(sessionsData.map(s => ({
+                        id: s.id,
+                        taskId: s.task_id,
+                        customName: s.custom_name,
+                        category: s.category,
+                        startTime: s.start_time,
+                        endTime: s.end_time
+                    })));
+                } else {
+                    setSessions([]);
+                }
+
+                if (tasksData) setTasks(tasksData);
+                else setTasks([]);
+
+                if (categoriesData) setCategories(categoriesData);
+                else setCategories([]);
+
+            } catch (error) {
+                console.error("Error fetching breakdown data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [dateString, user]);
+
 
     // Build color map from categories
     const categoryColors = useMemo(() => {
-        if (!categories) return DEFAULT_COLORS;
-
+        // Fallback to defaults first
         const colorMap: Record<string, string> = { ...DEFAULT_COLORS };
 
+        if (!categories || categories.length === 0) return colorMap;
+
         for (const cat of categories) {
-            // Extract color based on CSS class patterns
-            if (cat.color.includes('success')) colorMap[cat.name] = '#10b981';
-            else if (cat.color.includes('info') || cat.color.includes('blue')) colorMap[cat.name] = '#3b82f6';
-            else if (cat.color.includes('warning') || cat.color.includes('yellow')) colorMap[cat.name] = '#f59e0b';
-            else if (cat.color.includes('danger') || cat.color.includes('red')) colorMap[cat.name] = '#ef4444';
-            else if (cat.color.includes('purple')) colorMap[cat.name] = '#8b5cf6';
-            else if (cat.color.includes('muted') || cat.color.includes('gray')) colorMap[cat.name] = '#6b7280';
-            else if (cat.color.includes('green')) colorMap[cat.name] = '#22c55e';
+            // Extract color from DB or styles
+            // Assuming DB stores tailwind classes in 'color' or hex
+            if (cat.color) {
+                if (cat.color.startsWith('#')) {
+                    colorMap[cat.name] = cat.color;
+                } else {
+                    // Map common tailwind classes
+                    if (cat.color.includes('success')) colorMap[cat.name] = '#10b981';
+                    else if (cat.color.includes('info') || cat.color.includes('blue')) colorMap[cat.name] = '#3b82f6';
+                    else if (cat.color.includes('warning') || cat.color.includes('yellow')) colorMap[cat.name] = '#f59e0b';
+                    else if (cat.color.includes('danger') || cat.color.includes('red')) colorMap[cat.name] = '#ef4444';
+                    else if (cat.color.includes('purple')) colorMap[cat.name] = '#8b5cf6';
+                    else if (cat.color.includes('muted') || cat.color.includes('gray')) colorMap[cat.name] = '#6b7280';
+                    else if (cat.color.includes('green')) colorMap[cat.name] = '#22c55e';
+                }
+            }
         }
 
         return colorMap;
@@ -122,9 +177,9 @@ const DailyBreakdown = ({ selectedDate }: DailyBreakdownProps) => {
             return generateChartData({
                 logs,
                 currentDate: selectedDate,
-                dayStartTime,
-                wakeTime: sleepEntry?.wakeUpTime,
-                bedTime: sleepEntry?.bedTime,
+                // Use props directly
+                wakeTime: wakeUpTime,
+                bedTime: bedTime,
                 viewMode,
                 categoryColors,
             });
@@ -132,7 +187,7 @@ const DailyBreakdown = ({ selectedDate }: DailyBreakdownProps) => {
             console.error('Error generating chart data:', error);
             return [];
         }
-    }, [logs, selectedDate, dayStartTime, sleepEntry, viewMode, categoryColors]);
+    }, [logs, selectedDate, wakeUpTime, bedTime, viewMode, categoryColors]);
 
     // Calculate total tracked time (excluding "Untracked")
     const totalTrackedMinutes = useMemo(() => {
@@ -146,9 +201,12 @@ const DailyBreakdown = ({ selectedDate }: DailyBreakdownProps) => {
         if (active && payload && payload.length) {
             const data = payload[0];
             return (
-                <div className="bg-popover border border-border rounded-lg shadow-lg px-3 py-2">
-                    <p className="text-sm font-semibold">{data.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatMinutesToHours(data.value)}</p>
+                <div className="bg-popover/95 backdrop-blur-sm border border-border/50 rounded-xl shadow-xl px-4 py-3">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: data.fill }} />
+                        <p className="text-sm font-semibold">{data.name}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground pl-4">{formatMinutesToHours(data.value)}</p>
                 </div>
             );
         }
@@ -185,112 +243,125 @@ const DailyBreakdown = ({ selectedDate }: DailyBreakdownProps) => {
 
     const hasData = chartData.length > 0;
 
+    if (loading && !sessions.length) {
+        return (
+            <div className="flex items-center justify-center p-8">
+                <p className="text-muted-foreground animate-pulse">Loading breakdown...</p>
+            </div>
+        );
+    }
+
     return (
-        <div className="space-y-6 p-6">
+        <motion.div
+            className="space-y-6 p-1"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+        >
             {/* Header */}
-            <div>
-                <h2 className="text-2xl font-semibold">Daily Breakdown</h2>
-                <p className="text-sm text-muted-foreground">
-                    Total tracked: {formatMinutesToHours(totalTrackedMinutes)}
-                </p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-2xl font-bold tracking-tight">Daily Breakdown</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        Total tracked time: <span className="font-medium text-foreground">{formatMinutesToHours(totalTrackedMinutes)}</span>
+                    </p>
+                </div>
+
+                {/* View Mode Toggle - Segmented Control */}
+                <div className="bg-muted/50 p-1 rounded-lg flex items-center gap-1 w-full md:w-auto">
+                    {(['SESSION', 'CATEGORY', 'SUBCATEGORY'] as ViewMode[]).map((mode) => (
+                        <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            className={cn(
+                                "flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200",
+                                viewMode === mode
+                                    ? "bg-background text-foreground shadow-sm scale-[1.02]"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                            )}
+                        >
+                            {mode.charAt(0) + mode.slice(1).toLowerCase()}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            {/* Controls */}
-            <Card className="p-4">
-                <div className="flex flex-wrap gap-6 items-end">
-                    {/* Day Start Time */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-medium">Day Start Time</Label>
-                        <TimePicker
-                            value={dayStartTime}
-                            onChange={setDayStartTime}
-                            placeholder="Select start time"
-                            className="w-[120px]"
-                        />
-                    </div>
-
-                    {/* View Mode Toggle */}
-                    <div className="space-y-2 flex-1">
-                        <Label className="text-sm font-medium">View Mode</Label>
-                        <div className="flex gap-2">
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'SESSION' ? 'default' : 'outline'}
-                                onClick={() => setViewMode('SESSION')}
-                            >
-                                Session
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'CATEGORY' ? 'default' : 'outline'}
-                                onClick={() => setViewMode('CATEGORY')}
-                            >
-                                Category
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={viewMode === 'SUBCATEGORY' ? 'default' : 'outline'}
-                                onClick={() => setViewMode('SUBCATEGORY')}
-                            >
-                                Subcategory
-                            </Button>
+            {/* Chart Card */}
+            <Card className="p-8 border-border/50 shadow-sm bg-card/50 backdrop-blur-sm">
+                {!hasData || totalTrackedMinutes === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                        <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                            <svg className="w-8 h-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                            </svg>
                         </div>
-                    </div>
-                </div>
-            </Card>
-
-            {/* Chart */}
-            <Card className="p-6">
-                {!hasData ? (
-                    <div className="flex items-center justify-center h-[400px] text-muted-foreground">
-                        <div className="text-center">
-                            <p className="text-lg font-medium mb-2">No data to display</p>
-                            <p className="text-sm">Add sessions in the Execution tab to see your breakdown</p>
-                        </div>
+                        <p className="text-lg font-medium mb-1">No data available</p>
+                        <p className="text-sm opacity-70">Add sessions in Execution to see breakdown</p>
                     </div>
                 ) : (
-                    <>
-                        <ResponsiveContainer width="100%" height={400}>
-                            <PieChart>
-                                <Pie
-                                    data={chartData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={80}
-                                    outerRadius={140}
-                                    paddingAngle={2}
-                                    dataKey="value"
-                                    label={renderCenterLabel}
-                                >
-                                    {chartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                                    ))}
-                                </Pie>
-                                <Tooltip content={<CustomTooltip />} />
-                            </PieChart>
-                        </ResponsiveContainer>
+                    <div className="grid lg:grid-cols-2 gap-8 items-center">
+                        <div className="h-[400px] relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={chartData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={100}
+                                        outerRadius={160}
+                                        paddingAngle={3}
+                                        cornerRadius={4}
+                                        dataKey="value"
+                                        label={renderCenterLabel}
+                                        stroke="none"
+                                    >
+                                        {chartData.map((entry, index) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={entry.fill}
+                                                className="transition-opacity duration-200 hover:opacity-80"
+                                            />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip content={<CustomTooltip />} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
 
                         {/* Custom Legend */}
-                        <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {chartData.map((entry) => (
-                                <div key={entry.name} className="flex items-center gap-2">
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                            <h3 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">Breakdown Details</h3>
+                            {chartData.map((entry, index) => (
+                                <motion.div
+                                    key={entry.name}
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: index * 0.05 }}
+                                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors border border-transparent hover:border-border/50"
+                                >
                                     <div
-                                        className="w-3 h-3 rounded-full flex-shrink-0"
+                                        className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm"
                                         style={{ backgroundColor: entry.fill }}
                                     />
-                                    <div className="flex-1 min-w-0">
+                                    <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
                                         <p className="text-sm font-medium truncate">{entry.name}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {formatMinutesToHours(entry.value)}
-                                        </p>
+                                        <div className="text-right">
+                                            <p className="text-sm font-semibold tabular-nums">
+                                                {formatMinutesToHours(entry.value)}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                {Math.round((entry.value / (24 * 60)) * 100)}% of day
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
+                                </motion.div>
                             ))}
                         </div>
-                    </>
+                    </div>
                 )}
             </Card>
-        </div>
+        </motion.div>
     );
 };
 
