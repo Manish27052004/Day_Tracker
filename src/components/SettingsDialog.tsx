@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { type Priority, type Category } from '@/lib/db';
+import { db, type Priority, type Category } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -77,36 +77,52 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
         if (!user) return;
         setLoading(true);
 
-        // 1. Fetch Priorities
-        const { data: pData } = await supabase
-            .from('priorities')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('order', { ascending: true });
-        if (pData) setPriorities(pData);
+        try {
+            // 1. Fetch Priorities
+            const { data: pData } = await supabase
+                .from('priorities')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('order', { ascending: true });
 
-        // 2. Fetch Category Types (Main Categories)
-        const { data: ctData } = await supabase
-            .from('category_types')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('name', { ascending: true });
-        if (ctData) {
-            setCategoryTypes(ctData);
-            if (!newCategoryType && ctData.length > 0) {
-                setNewCategoryType(ctData[0].name);
+            if (pData) {
+                setPriorities(pData);
+                // Sync to local DB for offline access/analytics
+                await db.priorities.clear();
+                await db.priorities.bulkPut(pData);
             }
+
+            // 2. Fetch Category Types (Main Categories)
+            const { data: ctData } = await supabase
+                .from('category_types')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('name', { ascending: true });
+            if (ctData) {
+                setCategoryTypes(ctData);
+                if (!newCategoryType && ctData.length > 0) {
+                    setNewCategoryType(ctData[0].name);
+                }
+            }
+
+            // 3. Fetch Execution Categories
+            const { data: cData } = await supabase
+                .from('categories')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('order', { ascending: true });
+
+            if (cData) {
+                setCategories(cData as Category[]);
+                // Sync to local DB for offline access/analytics
+                await db.categories.clear();
+                await db.categories.bulkPut(cData as Category[]);
+            }
+        } catch (error) {
+            console.error("Error fetching settings:", error);
+        } finally {
+            setLoading(false);
         }
-
-        // 3. Fetch Execution Categories
-        const { data: cData } = await supabase
-            .from('categories')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('order', { ascending: true });
-        if (cData) setCategories(cData as Category[]);
-
-        setLoading(false);
     };
 
     // Initial Fetch
