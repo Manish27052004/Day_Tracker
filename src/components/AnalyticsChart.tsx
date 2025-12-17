@@ -237,7 +237,7 @@ const AnalyticsChart = () => {
         <div className="flex items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className={cn("w-[240px] justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+              <Button variant="outline" className={cn("min-w-[240px] w-auto justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {dateRange?.from ? (
                   dateRange.to ? (
