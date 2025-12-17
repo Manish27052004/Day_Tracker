@@ -248,6 +248,37 @@ export const useSync = () => {
                 }
             }
 
+            // Fetch Sleep Entries
+            const { data: cloudSleep } = await supabase
+                .from('sleep_entries')
+                .select('*')
+                .eq('date', dateString)
+                .eq('user_id', user.id)
+                .single(); // Should be only one per day
+
+            if (cloudSleep) {
+                const localSleep = await db.sleepEntries.where('date').equals(dateString).first();
+                if (!localSleep) {
+                    await db.sleepEntries.add({
+                        date: cloudSleep.date,
+                        wakeUpTime: cloudSleep.wake_up_time || '',
+                        bedTime: cloudSleep.bed_time || '',
+                        syncStatus: 'synced',
+                        userId: user.id
+                    });
+                } else if (localSleep.syncStatus === 'synced') {
+                    // If local is synced, trust cloud (overwrite logic if conflict, but here just ensure consistency)
+                    // If local is pending, keep local changes
+                    if (localSleep.wakeUpTime !== cloudSleep.wake_up_time || localSleep.bedTime !== cloudSleep.bed_time) {
+                        await db.sleepEntries.update(localSleep.id!, {
+                            wakeUpTime: cloudSleep.wake_up_time || '',
+                            bedTime: cloudSleep.bed_time || '',
+                            syncStatus: 'synced'
+                        });
+                    }
+                }
+            }
+
             setSyncStatus('idle');
         } catch (error) {
             console.error('Fetch failed:', error);

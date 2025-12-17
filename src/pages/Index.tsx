@@ -18,7 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 const Index = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [activePhase, setActivePhase] = useState<Phase>('planning');
-  const { fetchDateData } = useSync();
+  const { fetchDateData, processSyncQueue } = useSync();
   const { user } = useAuth();
 
   // Auto-generate tasks from templates for TODAY only
@@ -97,8 +97,6 @@ const Index = () => {
         wakeUpTime: time,
         syncStatus: 'pending' // Mark for sync
       });
-      // Trigger sync if we had access to useSync processQueue here, 
-      // but simpler to just mark pending and let background sync pick it up
     } else {
       await db.sleepEntries.add({
         date: dateString,
@@ -108,6 +106,8 @@ const Index = () => {
         userId: 'local'
       });
     }
+    // Trigger Sync immediately
+    processSyncQueue();
   };
 
   const handleBedTimeChange = async (time: string) => {
@@ -125,6 +125,8 @@ const Index = () => {
         userId: 'local'
       });
     }
+    // Trigger Sync immediately
+    processSyncQueue();
   };
 
   const renderPhaseContent = () => {
