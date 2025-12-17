@@ -199,7 +199,9 @@ const AnalyticsChart = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Dynamic Height Logic
-  const PIXELS_PER_HOUR = 50;
+  const PIXELS_PER_HOUR = 60;
+  const MIN_DISPLAY_HOURS = 10;
+  const VIEW_PORT_HOURS = 12; // Approx 720px max height before scrolling
 
   // Find the maximum value in the current dataset
   const maxSessionDuration = useMemo(() => {
@@ -207,22 +209,21 @@ const AnalyticsChart = () => {
     return Math.max(...chartData.map(d => (d._totalDuration || 0)));
   }, [chartData]);
 
-  // If ANY day exceeds 16h, switch to 24h mode. Otherwise cap at 16h.
-  const isOverflow = maxSessionDuration > 16;
-  const domainMax = isOverflow ? 24 : 16;
+  // Dynamic Domain: At least MIN_DISPLAY_HOURS, scale with data up to 24
+  const domainMax = Math.min(24, Math.max(MIN_DISPLAY_HOURS, Math.ceil(maxSessionDuration * 1.1))); // +10% headroom
 
   const TOTAL_HEIGHT = domainMax * PIXELS_PER_HOUR;
-  const VIEW_HEIGHT = 16 * PIXELS_PER_HOUR; // Always show 16h worth of space (~800px)
+  const MAX_VIEW_HEIGHT = VIEW_PORT_HOURS * PIXELS_PER_HOUR;
 
   // Generate ticks based on dynamic domain
   const yTicks = Array.from({ length: domainMax + 1 }, (_, i) => i);
 
-  // Auto-scroll to bottom on mount to show 0-16h range initially
+  // Auto-scroll logic (scroll to bottom to show 0-axis context if overflowing)
   useEffect(() => {
-    if (scrollContainerRef.current) {
+    if (scrollContainerRef.current && TOTAL_HEIGHT > MAX_VIEW_HEIGHT) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  }, [chartData]); // Run whenever data/height changes
+  }, [chartData, TOTAL_HEIGHT, MAX_VIEW_HEIGHT]);
 
   return (
     <motion.div
@@ -331,7 +332,7 @@ const AnalyticsChart = () => {
         <div
           ref={scrollContainerRef}
           className="w-full relative overflow-y-auto custom-scrollbar border-b border-border/50"
-          style={{ maxHeight: `${VIEW_HEIGHT}px` }} // Show approx 16h vertical
+          style={{ maxHeight: `${MAX_VIEW_HEIGHT}px` }} // Show approx 12h vertical
         >
           <div className="w-full overflow-x-auto pb-4">
             <div style={{ minWidth: `${minWidth}px`, height: `${TOTAL_HEIGHT}px` }}>
@@ -383,7 +384,7 @@ const AnalyticsChart = () => {
                     />
                   ))}
 
-                  {/* Invisible Line for Total Labels */}
+                  {/* Invisible Line for Total labels */}
                   <Line
                     type="monotone"
                     dataKey="_totalDuration"
