@@ -17,17 +17,18 @@ import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-interface SettingsDialogProps {
+export interface SettingsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     defaultTab?: 'priorities' | 'categories' | 'types';
 }
 
-interface CategoryType {
+export interface CategoryType {
     id: number;
     name: string;
     order: number;
     color?: string; // Optional property for now
+    is_active?: boolean;
 }
 
 const COLORS = [
@@ -85,11 +86,25 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                 .eq('user_id', user.id)
                 .order('order', { ascending: true });
 
+<<<<<<< HEAD
             if (pData) {
                 setPriorities(pData);
                 // Sync to local DB for offline access/analytics
                 await db.priorities.clear();
                 await db.priorities.bulkPut(pData);
+=======
+        // 2. Fetch Category Types (Main Categories)
+        const { data: ctData } = await supabase
+            .from('category_types')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('is_active', true) // Filter active
+            .order('name', { ascending: true });
+        if (ctData) {
+            setCategoryTypes(ctData);
+            if (!newCategoryType && ctData.length > 0) {
+                setNewCategoryType(ctData[0].name);
+>>>>>>> new
             }
 
             // 2. Fetch Category Types (Main Categories)
@@ -123,6 +138,20 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
         } finally {
             setLoading(false);
         }
+<<<<<<< HEAD
+=======
+
+        // 3. Fetch Execution Categories
+        const { data: cData } = await supabase
+            .from('categories')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('is_active', true) // Filter active
+            .order('order', { ascending: true });
+        if (cData) setCategories(cData as Category[]);
+
+        setLoading(false);
+>>>>>>> new
     };
 
     // Initial Fetch
@@ -175,9 +204,14 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
 
     const handleDeleteType = async (id: number) => {
         if (!user) return;
-        if (!confirm('Delete this main category? existing execution categories with this type will stick to the old name until updated.')) return;
+        if (!confirm('Archive this main category? It will be hidden from planning but historical data remains.')) return;
 
-        const { error } = await supabase.from('category_types').delete().eq('id', id).eq('user_id', user.id);
+        // SOFT DELETE: Set is_active = false
+        const { error } = await supabase
+            .from('category_types')
+            .update({ is_active: false })
+            .eq('id', id)
+            .eq('user_id', user.id);
         if (error) alert(error.message);
         else fetchData();
     };
@@ -283,7 +317,12 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
 
     const handleDeleteCategory = async (id: number) => {
         if (!user) return;
-        const { error } = await supabase.from('categories').delete().eq('id', id).eq('user_id', user.id);
+        // SOFT DELETE: Set is_active = false
+        const { error } = await supabase
+            .from('categories')
+            .update({ is_active: false })
+            .eq('id', id)
+            .eq('user_id', user.id);
         if (!error) fetchData();
     };
 
