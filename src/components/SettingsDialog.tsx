@@ -86,25 +86,11 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                 .eq('user_id', user.id)
                 .order('order', { ascending: true });
 
-<<<<<<< HEAD
             if (pData) {
                 setPriorities(pData);
                 // Sync to local DB for offline access/analytics
                 await db.priorities.clear();
                 await db.priorities.bulkPut(pData);
-=======
-        // 2. Fetch Category Types (Main Categories)
-        const { data: ctData } = await supabase
-            .from('category_types')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('is_active', true) // Filter active
-            .order('name', { ascending: true });
-        if (ctData) {
-            setCategoryTypes(ctData);
-            if (!newCategoryType && ctData.length > 0) {
-                setNewCategoryType(ctData[0].name);
->>>>>>> new
             }
 
             // 2. Fetch Category Types (Main Categories)
@@ -112,6 +98,7 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                 .from('category_types')
                 .select('*')
                 .eq('user_id', user.id)
+                .eq('is_active', true) // Filter active
                 .order('name', { ascending: true });
             if (ctData) {
                 setCategoryTypes(ctData);
@@ -125,6 +112,7 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                 .from('categories')
                 .select('*')
                 .eq('user_id', user.id)
+                .eq('is_active', true) // Filter active
                 .order('order', { ascending: true });
 
             if (cData) {
@@ -138,20 +126,6 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
         } finally {
             setLoading(false);
         }
-<<<<<<< HEAD
-=======
-
-        // 3. Fetch Execution Categories
-        const { data: cData } = await supabase
-            .from('categories')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('is_active', true) // Filter active
-            .order('order', { ascending: true });
-        if (cData) setCategories(cData as Category[]);
-
-        setLoading(false);
->>>>>>> new
     };
 
     // Initial Fetch
