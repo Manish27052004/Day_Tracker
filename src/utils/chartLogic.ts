@@ -82,6 +82,7 @@ interface GenerateChartDataParams {
     bedTime?: string;
     viewMode: ViewMode;
     categoryTypeMap?: Record<string, string>;
+    categoryColors?: Record<string, string>;
 }
 
 function parseTimeOnDate(timeStr: string, baseDate: Date): Date {

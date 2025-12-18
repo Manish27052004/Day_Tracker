@@ -147,9 +147,8 @@ export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo:
         // Process Night Sleep (Bed -> 24:00)
         if (entry.bed_time) {
             const bedMins = timeToMins(entry.bed_time);
-            // Sanity Check: Ignore bed times before 18:00 (6 PM) to prevent "Noon" mistakes
-            // 18 * 60 = 1080
-            if (bedMins < 1440 && bedMins >= 1080) {
+            // Sanity Check: Ignore if invalid time (>= 24:00)
+            if (bedMins < 1440) {
                 const ranges = subtractBusy(bedMins, 1440);
                 ranges.forEach(([start, end], idx) => {
                     sleepSessions.push({

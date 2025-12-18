@@ -127,8 +127,10 @@ const AnalyticsChart = () => {
 
       // Aggregate
       let totalDuration = 0;
+      let absoluteTotal = 0;
       daySessions.forEach(session => {
         const duration = calculateDuration(session.start_time, session.end_time) / 60; // Hours
+        absoluteTotal += duration;
 
         let key = '';
         if (viewMode === 'category') {
@@ -137,35 +139,57 @@ const AnalyticsChart = () => {
           key = session.category_type || 'Uncategorized';
         }
 
-        // If this key is currently selected by user filter
-        if (selectedIds.includes(key)) {
-          dataPoint[key] = (dataPoint[key] || 0) + duration;
-          totalDuration += duration;
+        // Always add to dataPoint, but set to 0 if not selected for animation
+        // Initial value check
+        if (!dataPoint[key]) dataPoint[key] = 0;
+
+        // Only increment if selected, otherwise it stays 0 (or we can just zero it out later)
+        // Actually, better approach: Calculate REAL total, then zero out unselected in a second pass
+        // to preserve the "real" value if we want to toggle back? 
+        // No, simplest is:
+        dataPoint[key] += duration;
+      });
+
+      // Post-process: Zero out unselected keys for animation
+      // We need to ensure ALL available keys are present in dataPoint with at least 0
+      const allKeys = viewMode === 'category'
+        ? availableCategories.map(c => c.name)
+        : availableTypes.map(t => t.name);
+
+      allKeys.forEach(key => {
+        if (!dataPoint[key]) dataPoint[key] = 0;
+
+        // If NOT selected, force to 0
+        if (!selectedIds.includes(key)) {
+          dataPoint[key] = 0;
+        } else {
+          // If selected, add to total
+          totalDuration += dataPoint[key];
         }
       });
 
       // Add Total for Summary Line
       dataPoint._totalDuration = totalDuration;
+      dataPoint._absoluteTotal = absoluteTotal; // Stable total for domain calculation
 
       // Round values
       Object.keys(dataPoint).forEach(k => {
-        if (k !== 'date') dataPoint[k] = Math.round(dataPoint[k] * 100) / 100;
+        if (k !== 'date' && k !== '_absoluteTotal') dataPoint[k] = Math.round(dataPoint[k] * 100) / 100;
       });
 
       return dataPoint;
     });
-  }, [sessions, dateRange, viewMode, selectedIds]);
+  }, [sessions, dateRange, viewMode, selectedIds, availableCategories, availableTypes]);
 
   // Get Active Keys for the Chart (to render <Bar /> components)
-  const activeKeys = useMemo(() => {
-    // We only want to render Bars for items that appear in the data OR are selected.
-    // Safer to iterate available metadata that is selected.
+  const renderedKeys = useMemo(() => {
+    // Render ALL available keys so <Bar> components stay mounted for animation
     if (viewMode === 'category') {
-      return availableCategories.filter(c => selectedIds.includes(c.name));
+      return availableCategories;
     } else {
-      return availableTypes.filter(t => selectedIds.includes(t.name));
+      return availableTypes;
     }
-  }, [availableCategories, availableTypes, selectedIds, viewMode]);
+  }, [availableCategories, availableTypes, viewMode]);
 
 
   const toggleSelection = (name: string) => {
@@ -206,7 +230,7 @@ const AnalyticsChart = () => {
   // Find the maximum value in the current dataset
   const maxSessionDuration = useMemo(() => {
     if (chartData.length === 0) return 0;
-    return Math.max(...chartData.map(d => (d._totalDuration || 0)));
+    return Math.max(...chartData.map(d => (d._absoluteTotal || 0)));
   }, [chartData]);
 
   // Dynamic Domain: At least MIN_DISPLAY_HOURS, scale with data up to 24
@@ -331,7 +355,7 @@ const AnalyticsChart = () => {
         {/* Scrollable Container Wrapper */}
         <div
           ref={scrollContainerRef}
-          className="w-full relative overflow-y-auto custom-scrollbar border-b border-border/50"
+          className="w-full relative overflow-y-auto border-b border-border/50"
           style={{ maxHeight: `${MAX_VIEW_HEIGHT}px` }} // Show approx 12h vertical
         >
           <div className="w-full overflow-x-auto pb-4">
@@ -363,7 +387,7 @@ const AnalyticsChart = () => {
                   <Tooltip
                     cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
                     formatter={(value: number, name: string) => {
-                      if (name === '_totalDuration') return [null, null];
+                      if (name === '_totalDuration' || value === 0) return [null, null];
                       return [formatYAxis(value), name];
                     }}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))' }}
@@ -372,7 +396,7 @@ const AnalyticsChart = () => {
                   />
 
                   {/* Dynamic Bars based on selection - Stacked */}
-                  {activeKeys.map((item) => (
+                  {renderedKeys.map((item) => (
                     <Bar
                       key={item.id}
                       dataKey={item.name}
@@ -381,6 +405,7 @@ const AnalyticsChart = () => {
                       radius={[0, 0, 0, 0]}
                       maxBarSize={80}
                       name={item.name}
+                      animationDuration={500}
                     />
                   ))}
 
@@ -390,7 +415,8 @@ const AnalyticsChart = () => {
                     dataKey="_totalDuration"
                     stroke="none"
                     dot={false}
-                    isAnimationActive={false}
+                    isAnimationActive={true}
+                    animationDuration={500}
                     legendType="none"
                   >
                     <LabelList
@@ -416,13 +442,18 @@ const AnalyticsChart = () => {
 
         {/* Custom Legend - Fixed at Bottom */}
         <div className="flex flex-wrap items-center justify-center gap-6 mt-6 pt-4 border-t border-border">
-          {activeKeys.map((item) => (
+          {renderedKeys.map((item) => (
             <div key={item.id} className="flex items-center gap-2">
               <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: getColorVar(item.color) }}
+                className="w-3 h-3 rounded-full transition-colors duration-300"
+                style={{
+                  backgroundColor: selectedIds.includes(item.name) ? getColorVar(item.color) : 'hsl(var(--muted))'
+                }}
               />
-              <span className="text-sm font-medium text-muted-foreground">
+              <span className={cn(
+                "text-sm font-medium transition-colors duration-300",
+                selectedIds.includes(item.name) ? "text-muted-foreground" : "text-muted-foreground/50"
+              )}>
                 {item.name}
               </span>
             </div>
