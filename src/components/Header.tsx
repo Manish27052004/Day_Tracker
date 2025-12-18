@@ -23,9 +23,12 @@ const Header = () => {
       <div className="container mx-auto px-4 py-3 max-w-6xl">
         <div className="flex items-center justify-between gap-4">
           {/* App Title */}
-          <h1 className="text-lg font-semibold text-foreground hidden sm:block">
-            Daily Tracker
-          </h1>
+          <Link to="/" className="flex items-center gap-2 group">
+            <img src="/logo.png" alt="Logo" className="h-8 w-8 transition-transform group-hover:scale-105" />
+            <h1 className="text-lg font-semibold text-foreground hidden sm:block">
+              Daily Tracker
+            </h1>
+          </Link>
 
           {/* Navigation */}
           <nav className="flex items-center justify-center gap-2 mx-auto sm:mx-0">
