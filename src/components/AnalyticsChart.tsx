@@ -11,6 +11,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts';
 import {
   calculateDuration,
@@ -21,9 +22,19 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, Filter } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import { fetchAnalyticsData, fetchAllCategories, fetchAllCategoryTypes, AnalyticsSession, AnalyticsCategory, AnalyticsCategoryType } from '@/services/analyticsService';
+import {
+  fetchAnalyticsData,
+  fetchAllCategories,
+  fetchAllCategoryTypes,
+  fetchGoals,
+  AnalyticsSession,
+  AnalyticsCategory,
+  AnalyticsCategoryType,
+  AnalyticsGoal
+} from '@/services/analyticsService';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import GoalSettingsDialog from './GoalSettingsDialog';
 
 // Helper to map DB colors to CSS variables for Recharts
 const getColorVar = (dbColorClass: string | undefined): string => {
@@ -49,6 +60,7 @@ const AnalyticsChart = () => {
   const [availableCategories, setAvailableCategories] = useState<AnalyticsCategory[]>([]);
   const [availableTypes, setAvailableTypes] = useState<AnalyticsCategoryType[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]); // IDs of selected categories/types
+  const [goals, setGoals] = useState<AnalyticsGoal[]>([]);
 
   // Data State
   const [sessions, setSessions] = useState<AnalyticsSession[]>([]);
@@ -59,10 +71,13 @@ const AnalyticsChart = () => {
     if (!user) return;
     const loadMetadata = async () => {
       try {
-        const [cats, types] = await Promise.all([
+        const [cats, types, existingGoals] = await Promise.all([
           fetchAllCategories(user.id),
-          fetchAllCategoryTypes(user.id)
+          fetchAllCategoryTypes(user.id),
+          fetchGoals(user.id)
         ]);
+
+        setGoals(existingGoals);
 
         // Ensure "Sleep" category exists (it might be virtual)
         const hasSleep = cats.some(c => c.name === 'Sleep');
@@ -289,6 +304,13 @@ const AnalyticsChart = () => {
               />
             </PopoverContent>
           </Popover>
+
+          {/* Goal Settings Button */}
+          <GoalSettingsDialog
+            analyticsCategories={availableCategories}
+            analyticsTypes={availableTypes}
+            onGoalsUpdated={setGoals}
+          />
         </div>
 
         {/* 2. View Mode Toggle */}
@@ -434,6 +456,27 @@ const AnalyticsChart = () => {
                       }}
                     />
                   </Line>
+
+                  {/* Render Goals */}
+                  {goals
+                    .filter(g => selectedIds.includes(g.category_key)) // Only show goals for visible categories
+                    .map(goal => (
+                      <ReferenceLine
+                        key={goal.id}
+                        y={goal.target_hours}
+                        stroke={goal.color}
+                        strokeDasharray="3 3"
+                        strokeWidth={2}
+                        label={{
+                          value: `${goal.label} (${formatDuration(Math.round(goal.target_hours * 60))})`,
+                          position: 'insideBottomLeft',
+                          fill: goal.color,
+                          fontSize: 12,
+                          fontWeight: 600
+                        }}
+                      />
+                    ))
+                  }
                 </ComposedChart>
               </ResponsiveContainer>
             </div>

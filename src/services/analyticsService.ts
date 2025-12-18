@@ -198,3 +198,59 @@ export const fetchAllCategoryTypes = async (userId: string) => {
     if (error) throw error;
     return data as AnalyticsCategoryType[];
 };
+
+export interface AnalyticsGoal {
+    id: number;
+    user_id: string;
+    label: string;
+    target_hours: number;
+    category_key: string;
+    color: string;
+    created_at?: string;
+}
+
+/**
+ * Goals CRUD
+ */
+export const fetchGoals = async (userId: string) => {
+    const { data, error } = await supabase
+        .from('analytics_goals')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data as AnalyticsGoal[];
+};
+
+export const createGoal = async (goal: Omit<AnalyticsGoal, 'id' | 'created_at'>) => {
+    const { data, error } = await supabase
+        .from('analytics_goals')
+        .insert(goal)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data as AnalyticsGoal;
+};
+
+export const updateGoal = async (id: number, updates: Partial<AnalyticsGoal>) => {
+    const { data, error } = await supabase
+        .from('analytics_goals')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data as AnalyticsGoal;
+};
+
+export const deleteGoal = async (id: number) => {
+    const { error } = await supabase
+        .from('analytics_goals')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+};
