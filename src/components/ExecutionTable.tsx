@@ -192,10 +192,43 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
     else console.log(`✅ Task Updated: ${streaks.achiever_strike} 🔥 / ${streaks.fighter_strike} ⚔️`);
   };
 
-  // 🔥 FIX: Add session with proper ID tracking
+  // 🔥 FIX: Time Overlap Validation Helper
+  const isTimeOverlapping = (start: string, end: string, currentSessionId: number | null) => {
+    // Convert HH:mm to minutes for comparison
+    const toMinutes = (time: string) => {
+      const [h, m] = time.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    const startM = toMinutes(start);
+    const endM = toMinutes(end);
+
+    // Filter out the current session being edited
+    const otherSessions = sessions.filter(s => s.id !== currentSessionId);
+
+    return otherSessions.some(s => {
+      const sStart = toMinutes(s.startTime);
+      const sEnd = toMinutes(s.endTime);
+
+      // Overlap logic: (StartA < EndB) && (EndA > StartB)
+      return (startM < sEnd) && (endM > sStart);
+    });
+  };
+
+  // 🔥 FIX: Add session with proper ID tracking and VALIDATION
   const addSession = async () => {
     if (!user) {
       alert('Please sign in to add sessions');
+      return;
+    }
+
+    // Default times
+    const defaultStart = '09:00';
+    const defaultEnd = '10:00';
+
+    // Validate Check with null ID since it's a new session
+    if (isTimeOverlapping(defaultStart, defaultEnd, null)) {
+      alert("Cannot add session: The default time (09:00 - 10:00) overlaps with an existing session. Please adjust existing sessions first.");
       return;
     }
 
@@ -209,8 +242,8 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
       custom_name: '',
       category: defaultCategory.name,
       category_type: defaultCategory.type,
-      start_time: '09:00',
-      end_time: '10:00',
+      start_time: defaultStart,
+      end_time: defaultEnd,
       description: '',
       created_at: new Date().toISOString()
     };
@@ -243,13 +276,38 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
     }
   };
 
-  // 🔥 FIX: Update session (not insert!)
+  // 🔥 FIX: Update session (with Overlap Validation)
   const updateSession = async (id: string, updates: Partial<any>) => {
     if (!user) return;
 
-    // Find the session before update to know previous Task ID (if changing tasks)
+    // Find the session before update
     const oldSession = sessions.find(s => s.id === id);
-    const oldTaskId = oldSession?.taskId;
+    if (!oldSession) return;
+    const oldTaskId = oldSession.taskId;
+
+    // 1. VALIDATION LOCAL CHECK
+    // If times are changing, verify overlap
+    if (updates.startTime || updates.endTime) {
+      const newStart = updates.startTime || oldSession.startTime;
+      const newEnd = updates.endTime || oldSession.endTime;
+
+      if (isTimeOverlapping(newStart, newEnd, Number(id))) {
+        // Allow local state update so user sees what they typed, BUT show error?
+        // Or strictly block? User said: "Disable Save action". 
+        // Since we auto-save, blocking DB update = Disable Save.
+        // We will allow the local UI to update (for feedback) but prevent DB write, 
+        // AND maybe trigger a toast/alert or rely on the red text UI.
+
+        console.warn("Validation Error: Overlapping time detected. DB Update prevented.");
+        // We Update LOCAL state to show the overlap (so UI turns red)
+        setSessions(prev =>
+          prev.map(s =>
+            s.id === id ? { ...s, ...updates } : s
+          )
+        );
+        return; // 🛑 EXIT, Do not save to DB
+      }
+    }
 
     const supabaseUpdates: any = {};
     if (updates.taskId !== undefined) supabaseUpdates.task_id = updates.taskId;
@@ -277,14 +335,12 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
       );
 
       // 🔥 UPDATE STREAKS
-      // If task changed, update BOTH old and new tasks
       const newTaskId = updates.taskId !== undefined ? updates.taskId : oldTaskId;
 
       if (oldTaskId && oldTaskId !== newTaskId) {
         await updateTaskProgress(oldTaskId);
       }
       if (newTaskId) {
-        // Add small delay to ensure Supabase read consistency if we are reading back sessions
         setTimeout(() => updateTaskProgress(newTaskId), 500);
       }
     }
@@ -358,13 +414,10 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
             <AnimatePresence mode="popLayout">
               {sessions?.map((session, index) => {
                 const duration = calculateDuration(session.startTime, session.endTime);
-
-                // Construct Select Value: "type:name" to ensure uniqueness and parsing
-                // Or just use name if names are unique. Current DB schema doesn't enforce unique names across types, but UI implies it.
-                // Let's use `${ session.categoryType }:${ session.category } ` pattern just like before, but `session.category` is now the Name.
-                // NOTE: The previous values had a trailing space? `work:${c.name} ` -> check if space is needed. 
-                // Previous code: value={`work:${c.name} `}. Yes, trailing space. I will keep it for consistency.
                 const selectValue = `${session.categoryType}:${session.category} `;
+
+                // OVERLAP CHECK FOR UI
+                const isOverlapping = isTimeOverlapping(session.startTime, session.endTime, session.id);
 
                 return (
                   <motion.tr
@@ -374,25 +427,27 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.2, delay: index * 0.05 }}
-                    className="hover:bg-muted/20 transition-colors group"
+                    className="hover:bg-muted/20 transition-colors group relative" // relative for potential absolute error positioning
                   >
                     {/* Session (Task Link or Custom Name) - Sticky Left 0 */}
                     <td className="min-w-[250px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
-                      <TaskComboBox
-                        tasks={tasks || []}
-                        selectedTaskId={session.taskId}
-                        customValue={session.customName}
-                        onTaskSelect={(taskId, name) => {
-                          if (taskId) {
-                            // Link to existing task
-                            updateSession(session.id!, { taskId, customName: '' });
-                          } else {
-                            // Custom name entry
-                            updateSession(session.id!, { taskId: null, customName: name });
-                          }
-                        }}
-                        placeholder="Select task or type custom..."
-                      />
+                      <div className="flex flex-col gap-1">
+                        <TaskComboBox
+                          tasks={tasks || []}
+                          selectedTaskId={session.taskId}
+                          customValue={session.customName}
+                          onTaskSelect={(taskId, name) => {
+                            if (taskId) updateSession(session.id!, { taskId, customName: '' });
+                            else updateSession(session.id!, { taskId: null, customName: name });
+                          }}
+                          placeholder="Select task or type custom..."
+                        />
+                        {isOverlapping && (
+                          <span className="text-[10px] text-destructive font-medium animate-pulse">
+                            ⚠️ Time overlaps with existing session
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Category */}
@@ -402,7 +457,7 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
                           value={selectValue}
                           onValueChange={(value) => {
                             const [type, catName] = value.split(':');
-                            const cleanCatName = catName.trim(); // Remove the trailing space we added
+                            const cleanCatName = catName.trim();
                             updateSession(session.id!, { categoryType: type as any, category: cleanCatName });
                           }}
                         >
@@ -431,22 +486,24 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
 
                     {/* Start Time */}
                     <td className="min-w-[120px] px-4 py-3">
-                      <div className="flex justify-center">
+                      <div className={cn("flex justify-center transition-colors", isOverlapping && "text-destructive")}>
                         <TimePicker
                           value={session.startTime}
                           onChange={(time) => updateSession(session.id!, { startTime: time })}
                           placeholder="Start"
+                          className={cn(isOverlapping && "text-destructive border-destructive/50 ring-destructive/30")}
                         />
                       </div>
                     </td>
 
                     {/* End Time */}
                     <td className="min-w-[120px] px-4 py-3">
-                      <div className="flex justify-center">
+                      <div className={cn("flex justify-center transition-colors", isOverlapping && "text-destructive")}>
                         <TimePicker
                           value={session.endTime}
                           onChange={(time) => updateSession(session.id!, { endTime: time })}
                           placeholder="End"
+                          className={cn(isOverlapping && "text-destructive border-destructive/50 ring-destructive/30")}
                         />
                       </div>
                     </td>

@@ -479,7 +479,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
                 Strike
               </th>
               {/* Task Name - Sticky Left 80px */}
-              <th className="min-w-[250px] sticky left-[80px] z-20 bg-background border-r border-border px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">
+              <th className="min-w-[250px] sticky left-[79px] z-20 bg-background border-r border-border pl-2 pr-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">
                 Task Name
               </th>
               <th className="min-w-[150px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Progress</th>
@@ -549,7 +549,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
                     </td>
 
                     {/* Task Name - Sticky Left 80px */}
-                    <td className="min-w-[250px] sticky left-[80px] z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
+                    <td className="min-w-[250px] sticky left-[79px] z-20 bg-background group-hover:bg-background border-r border-border pl-2 pr-4 py-3">
                       <div className="flex items-center gap-2">
                         <DebouncedInput
                           value={task.name}
