@@ -130,6 +130,7 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
         .from('categories')
         .select('*')
         .eq('user_id', user.id)
+        .eq('is_active', true) // 🔥 FIX: Hide archived categories
         .order('order', { ascending: true });
 
       if (data) setCategories(data as Category[]);

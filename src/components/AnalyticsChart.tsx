@@ -20,7 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Filter } from 'lucide-react';
+import { CalendarIcon, Filter, Archive } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import {
   fetchAnalyticsData,
@@ -57,10 +57,15 @@ const AnalyticsChart = () => {
   });
 
   const [viewMode, setViewMode] = useState<'type' | 'category'>('category');
-  const [availableCategories, setAvailableCategories] = useState<AnalyticsCategory[]>([]);
-  const [availableTypes, setAvailableTypes] = useState<AnalyticsCategoryType[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]); // IDs of selected categories/types
+  const [dbCategories, setDbCategories] = useState<AnalyticsCategory[]>([]);
+  const [dbTypes, setDbTypes] = useState<AnalyticsCategoryType[]>([]);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]); // IDs of selected categories/types
   const [goals, setGoals] = useState<AnalyticsGoal[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+
+  // Computed: Selected Names (to handle duplicates by name in Legend/Logic)
+  // Placeholder - Removed as we will define selectedNames correctly after displayCategories
+
 
   // Data State
   const [sessions, setSessions] = useState<AnalyticsSession[]>([]);
@@ -92,14 +97,14 @@ const AnalyticsChart = () => {
           }];
         }
 
-        setAvailableCategories(finalCats);
-        setAvailableTypes(types);
+        setDbCategories(finalCats);
+        setDbTypes(types);
 
         // Select all by default
         if (viewMode === 'category') {
-          setSelectedIds(finalCats.map(c => c.name));
+          setSelectedIds(finalCats.map(c => c.id));
         } else {
-          setSelectedIds(types.map(t => t.name));
+          setSelectedIds(types.map(t => t.id));
         }
       } catch (error) {
         console.error("Failed to load metadata", error);
@@ -127,6 +132,65 @@ const AnalyticsChart = () => {
   }, [user, dateRange]);
 
 
+  // DYNAMIC CATEGORY RESOLUTION
+  // Merge DB Categories with "Ghost" Categories found in historical data
+  const { displayCategories, displayTypes } = useMemo(() => {
+    // 1. Start with known DB items
+    const catMap = new Map<string, AnalyticsCategory>();
+    dbCategories.forEach(c => catMap.set(c.name.trim(), c));
+
+    const typeMap = new Map<string, AnalyticsCategoryType>();
+    dbTypes.forEach(t => typeMap.set(t.name.trim(), t));
+
+    // 2. Scan sessions for unknown names AND track usage
+    const usedCategoryNames = new Set<string>();
+    const usedTypeNames = new Set<string>();
+
+    sessions.forEach(s => {
+      const catName = (s.category || '').trim();
+      const typeName = (s.category_type || 'Uncategorized').trim();
+
+      if (!catName) return;
+
+      usedCategoryNames.add(catName);
+      usedTypeNames.add(typeName);
+
+      // Category Check
+      if (!catMap.has(catName)) {
+        // ... (Ghost creation logic remains same)
+        const ghostId = -Math.abs(catName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) - 1000;
+        catMap.set(catName, {
+          id: ghostId,
+          name: catName,
+          type: typeName,
+          color: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
+          is_active: false
+        });
+      }
+
+      // Type Check
+      if (!typeMap.has(typeName)) {
+        const ghostTypeId = -Math.abs(typeName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) - 2000;
+        typeMap.set(typeName, {
+          id: ghostTypeId,
+          name: typeName,
+          is_active: false
+        });
+      }
+    });
+
+    // 3. Filter out Inactive categories that are NOT used
+    // Active categories are always kept (so you can select them even if 0 data)
+    // Archived/Ghost categories are only kept if they exist in the current session set
+    const finalCategories = Array.from(catMap.values()).filter(c => c.is_active || usedCategoryNames.has(c.name));
+    const finalTypes = Array.from(typeMap.values()).filter(t => t.is_active || usedTypeNames.has(t.name));
+
+    return {
+      displayCategories: finalCategories,
+      displayTypes: finalTypes
+    };
+  }, [sessions, dbCategories, dbTypes]);
+
   // TRANSFORM DATA
   const chartData = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return [];
@@ -149,33 +213,35 @@ const AnalyticsChart = () => {
 
         let key = '';
         if (viewMode === 'category') {
-          key = session.category;
+          key = (session.category || '').trim();
         } else {
-          key = session.category_type || 'Uncategorized';
+          key = (session.category_type || 'Uncategorized').trim();
         }
 
-        // Always add to dataPoint, but set to 0 if not selected for animation
-        // Initial value check
-        if (!dataPoint[key]) dataPoint[key] = 0;
+        if (!key) return; // Skip if no key
 
-        // Only increment if selected, otherwise it stays 0 (or we can just zero it out later)
-        // Actually, better approach: Calculate REAL total, then zero out unselected in a second pass
-        // to preserve the "real" value if we want to toggle back? 
-        // No, simplest is:
+        if (!dataPoint[key]) dataPoint[key] = 0;
         dataPoint[key] += duration;
       });
 
       // Post-process: Zero out unselected keys for animation
       // We need to ensure ALL available keys are present in dataPoint with at least 0
       const allKeys = viewMode === 'category'
-        ? availableCategories.map(c => c.name)
-        : availableTypes.map(t => t.name);
+        ? displayCategories.map(c => c.name)
+        : displayTypes.map(t => t.name);
+
+      // Inline selectedNames logic here or define before
+      const currentSelectedNames = new Set(
+        (viewMode === 'category' ? displayCategories : displayTypes)
+          .filter(item => selectedIds.includes(item.id))
+          .map(item => item.name)
+      );
 
       allKeys.forEach(key => {
         if (!dataPoint[key]) dataPoint[key] = 0;
 
-        // If NOT selected, force to 0
-        if (!selectedIds.includes(key)) {
+        // If NOT selected (by checking if the Name is in the selected set), force to 0
+        if (!currentSelectedNames.has(key)) {
           dataPoint[key] = 0;
         } else {
           // If selected, add to total
@@ -194,34 +260,48 @@ const AnalyticsChart = () => {
 
       return dataPoint;
     });
-  }, [sessions, dateRange, viewMode, selectedIds, availableCategories, availableTypes]);
+  }, [sessions, dateRange, viewMode, selectedIds, displayCategories, displayTypes]);
+
+  // Computed: Selected Names (to handle duplicates by name in Legend/Logic) - DEFINED AFTER displayCategories
+  // This is used for the Legend rendering below
+  const selectedNames = useMemo(() => {
+    const source = viewMode === 'category' ? displayCategories : displayTypes;
+    return new Set(
+      source
+        .filter(item => selectedIds.includes(item.id))
+        .map(item => item.name)
+    );
+  }, [viewMode, displayCategories, displayTypes, selectedIds]);
 
   // Get Active Keys for the Chart (to render <Bar /> components)
+  // DEDUPLICATE by Name to avoid Double-Counting/Stacking visual bugs if multiple categories have same name
   const renderedKeys = useMemo(() => {
-    // Render ALL available keys so <Bar> components stay mounted for animation
-    if (viewMode === 'category') {
-      return availableCategories;
-    } else {
-      return availableTypes;
-    }
-  }, [availableCategories, availableTypes, viewMode]);
+    const source = viewMode === 'category' ? displayCategories : displayTypes;
+    return source.filter(item => selectedIds.includes(item.id));
+  }, [displayCategories, displayTypes, viewMode, selectedIds]);
 
 
-  const toggleSelection = (name: string) => {
+  const toggleSelection = (id: number) => {
     setSelectedIds(prev =>
-      prev.includes(name) ? prev.filter(id => id !== name) : [...prev, name]
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
 
   const toggleAll = () => {
-    const allNames = viewMode === 'category'
-      ? availableCategories.map(c => c.name)
-      : availableTypes.map(t => t.name);
+    const allIds = viewMode === 'category'
+      ? displayCategories.filter(c => showArchived || c.is_active).map(c => c.id)
+      : displayTypes.filter(t => showArchived || t.is_active).map(t => t.id);
 
-    if (selectedIds.length === allNames.length) {
-      setSelectedIds([]);
+    // Check if ALL VISIBLE are selected
+    const allVisibleSelected = allIds.every(id => selectedIds.includes(id));
+
+    if (allVisibleSelected) {
+      // Deselect all visible
+      setSelectedIds(prev => prev.filter(id => !allIds.includes(id)));
     } else {
-      setSelectedIds(allNames);
+      // Select all visible (merge with existing to not lose hidden ones if that was a use case, but usually "Select All" means what I see)
+      // Actually user probably wants to reset to JUST these.
+      setSelectedIds(allIds);
     }
   };
 
@@ -307,8 +387,8 @@ const AnalyticsChart = () => {
 
           {/* Goal Settings Button */}
           <GoalSettingsDialog
-            analyticsCategories={availableCategories}
-            analyticsTypes={availableTypes}
+            analyticsCategories={displayCategories}
+            analyticsTypes={displayTypes}
             onGoalsUpdated={setGoals}
           />
         </div>
@@ -336,34 +416,76 @@ const AnalyticsChart = () => {
           <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <Filter className="h-4 w-4" />
             Filter Data
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-6 w-6 ml-2", showArchived ? "text-primary bg-primary/10" : "text-muted-foreground")}
+              onClick={() => setShowArchived(!showArchived)}
+              title={showArchived ? "Hide Archived" : "Show Archived"}
+            >
+              <Archive className="h-3.5 w-3.5" />
+            </Button>
           </div>
           <Button variant="ghost" size="sm" onClick={toggleAll} className="h-8 text-xs">
             {selectedIds.length > 0 ? 'Deselect All' : 'Select All'}
           </Button>
         </div>
         <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto custom-scrollbar">
-          {(viewMode === 'category' ? availableCategories : availableTypes).map((item) => (
-            <Button
-              key={item.id}
-              variant={selectedIds.includes(item.name) ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => toggleSelection(item.name)}
-              className={cn(
-                "text-xs h-7 transition-all",
-                selectedIds.includes(item.name)
-                  ? "ring-1 ring-offset-1 ring-primary/20"
-                  : "opacity-70 grayscale hover:grayscale-0 hover:opacity-100"
-              )}
-              style={selectedIds.includes(item.name) ? {
-                backgroundColor: getColorVar(item.color),
-                borderColor: getColorVar(item.color),
-                color: 'white' // Assuming dark/colored bg
-              } : {}}
-            >
-              {item.name}
-              {!item.is_active && <span className="ml-1.5 text-[10px] opacity-60">(Archived)</span>}
-            </Button>
-          ))}
+          {/* Active Items */}
+          {(viewMode === 'category' ? displayCategories : displayTypes)
+            .filter(item => item.is_active)
+            .map((item) => (
+              <Button
+                key={item.id}
+                variant={selectedIds.includes(item.id) ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => toggleSelection(item.id)}
+                className={cn(
+                  "text-xs h-7 transition-all",
+                  selectedIds.includes(item.id)
+                    ? "ring-1 ring-offset-1 ring-primary/20"
+                    : "opacity-70 grayscale hover:grayscale-0 hover:opacity-100"
+                )}
+                style={selectedIds.includes(item.id) ? {
+                  backgroundColor: getColorVar(item.color),
+                  borderColor: getColorVar(item.color),
+                  color: 'white' // Assuming dark/colored bg
+                } : {}}
+              >
+                {item.name}
+              </Button>
+            ))}
+
+          {/* Archived Items Separator */}
+          {showArchived && (viewMode === 'category' ? displayCategories : displayTypes).some(item => !item.is_active) && (
+            <div className="w-full h-px bg-border my-1" />
+          )}
+
+          {/* Archived Items */}
+          {showArchived && (viewMode === 'category' ? displayCategories : displayTypes)
+            .filter(item => !item.is_active)
+            .map((item) => (
+              <Button
+                key={item.id}
+                variant={selectedIds.includes(item.id) ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => toggleSelection(item.id)}
+                className={cn(
+                  "text-xs h-7 transition-all opacity-60 hover:opacity-100",
+                  selectedIds.includes(item.id)
+                    ? "ring-1 ring-offset-1 ring-primary/20"
+                    : "grayscale"
+                )}
+                style={selectedIds.includes(item.id) ? {
+                  backgroundColor: getColorVar(item.color),
+                  borderColor: getColorVar(item.color),
+                  color: 'white'
+                } : {}}
+              >
+                {item.name}
+                <span className="ml-1.5 text-[10px] opacity-60">(Archived)</span>
+              </Button>
+            ))}
         </div>
       </div>
 
@@ -459,7 +581,11 @@ const AnalyticsChart = () => {
 
                   {/* Render Goals */}
                   {goals
-                    .filter(g => selectedIds.includes(g.category_key)) // Only show goals for visible categories
+                    .filter(g => {
+                      // Find if the goal's category name corresponds to any SELECTED ID
+                      const relatedCat = displayCategories.find(c => c.name === g.category_key);
+                      return relatedCat && selectedIds.includes(relatedCat.id);
+                    }) // Only show goals for visible categories
                     .map(goal => (
                       <ReferenceLine
                         key={goal.id}
@@ -490,12 +616,13 @@ const AnalyticsChart = () => {
               <div
                 className="w-3 h-3 rounded-full transition-colors duration-300"
                 style={{
-                  backgroundColor: selectedIds.includes(item.name) ? getColorVar(item.color) : 'hsl(var(--muted))'
+                  // Check if ANY item with this name is selected (since this is the Legend from unique keys)
+                  backgroundColor: selectedNames.has(item.name) ? getColorVar(item.color) : 'hsl(var(--muted))'
                 }}
               />
               <span className={cn(
                 "text-sm font-medium transition-colors duration-300",
-                selectedIds.includes(item.name) ? "text-muted-foreground" : "text-muted-foreground/50"
+                selectedNames.has(item.name) ? "text-muted-foreground" : "text-muted-foreground/50"
               )}>
                 {item.name}
               </span>
