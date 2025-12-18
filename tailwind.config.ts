@@ -91,6 +91,14 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "content-hide": {
+          from: { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
+          to: { opacity: "0", transform: "translate(-50%, -50%) scale(0.95)" },
+        },
+        "overlay-hide": {
+          from: { opacity: "1" },
+          to: { opacity: "0" },
+        },
         "fade-in": {
           "0%": { opacity: "0", transform: "translateY(10px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
@@ -130,6 +138,8 @@ export default {
         "progress-fill": "progress-fill 0.8s ease-out forwards",
         shimmer: "shimmer 2s infinite",
         pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "content-hide": "content-hide 0.2s ease-in forwards",
+        "overlay-hide": "overlay-hide 0.3s ease-in forwards",
       },
       boxShadow: {
         'notion': '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)',
