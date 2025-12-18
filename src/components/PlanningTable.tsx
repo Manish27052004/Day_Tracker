@@ -378,9 +378,10 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
 
     console.log('🔥 Creating task from template:', template);
 
-    // 🔥 FIX: Convert Dexie integer ID to UUID format
-    const templateUuid = `00000000-0000-0000-0000-${String(template.id).padStart(12, '0')}`;
-    console.log('📝 Template ID conversion:', template.id, '→', templateUuid);
+    // 🔥 FIX: Convert Cloud integer ID to distinct UUID format (Offset from Local IDs)
+    // Local Dexie IDs used 0000... prefix. We use ffff... for Cloud to prevent collision.
+    const templateUuid = `ffffffff-ffff-ffff-ffff-${String(template.id).padStart(12, '0')}`;
+    console.log('📝 Template ID conversion (Cloud):', template.id, '→', templateUuid);
 
     // Streaks will be calculated automatically by PostgreSQL trigger
     // See: migrations/001_create_streak_trigger.sql

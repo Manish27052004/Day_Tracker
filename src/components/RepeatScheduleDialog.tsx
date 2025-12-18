@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-// import { useLiveQuery } from 'dexie-react-hooks'; // REMOVED
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -16,48 +15,31 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import TimePicker from './TimePicker';
 import DurationPicker from './DurationPicker';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import PriorityTag from './PriorityTag';
-import { db, type Task, type RepeatingTask, type Priority } from '@/lib/db';
+import { type Task, type Priority } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { cn } from '@/lib/utils';
+import { createTemplate, updateTemplate, TaskTemplate } from '@/services/templateService';
+import { toast } from 'sonner';
 
 interface RepeatScheduleDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    task?: Task | RepeatingTask;  // Task when converting to template, RepeatingTask when editing template
+    task?: Task | TaskTemplate;  // Support both for creation/editing
+    onSave?: () => void;
 }
 
-const DAYS_OF_WEEK = [
-    { value: 0, label: 'Sun', fullLabel: 'Sunday' },
-    { value: 1, label: 'Mon', fullLabel: 'Monday' },
-    { value: 2, label: 'Tue', fullLabel: 'Tuesday' },
-    { value: 3, label: 'Wed', fullLabel: 'Wednesday' },
-    { value: 4, label: 'Thu', fullLabel: 'Thursday' },
-    { value: 5, label: 'Fri', fullLabel: 'Friday' },
-    { value: 6, label: 'Sat', fullLabel: 'Saturday' },
-];
-
-const RepeatScheduleDialog = ({ open, onOpenChange, task }: RepeatScheduleDialogProps) => {
-    // const priorities = useLiveQuery(() => db.priorities.orderBy('order').toArray()); // REMOVED
+const RepeatScheduleDialog = ({ open, onOpenChange, task, onSave }: RepeatScheduleDialogProps) => {
     const { user } = useAuth();
     const [priorities, setPriorities] = useState<Priority[]>([]);
 
     const [name, setName] = useState(task?.name || '');
-    const [priority, setPriority] = useState<Task['priority']>(task?.priority || null); // Changed default to null or 'normal'? 'normal' doesn't exist in new schema usually.
-    // Let's stick to null or what was passed. If 'normal' was passed, it might be legacy. 
-    // New system uses dynamic strings.
+    const [priority, setPriority] = useState<string | null>(task?.priority || null);
     const [targetTime, setTargetTime] = useState(task?.targetTime || 60);
     const [description, setDescription] = useState(task?.description || '');
-    const [repeatPattern, setRepeatPattern] = useState<'daily' | 'weekly' | 'custom'>('daily');
-    const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]); // Mon-Fri default
-    const [addAtTime, setAddAtTime] = useState<string>('');
-    const [useTimeSchedule, setUseTimeSchedule] = useState(false);
     const [minCompletionTarget, setMinCompletionTarget] = useState(50); // Default 50%
 
     // Fetch Priorities from Supabase
@@ -85,92 +67,79 @@ const RepeatScheduleDialog = ({ open, onOpenChange, task }: RepeatScheduleDialog
                 setPriority(task.priority || null);
                 setTargetTime(task.targetTime || 60);
                 setDescription(task.description || '');
+
+                // Initialize template specific fields if editing a template
+                if ('isActive' in task) {
+                    const template = task as TaskTemplate;
+                    setMinCompletionTarget(template.minCompletionTarget || 50);
+                }
             } else {
                 // Creating new template - reset form
                 setName('');
                 setPriority(null);
                 setTargetTime(60);
                 setDescription('');
-                setRepeatPattern('daily');
-                setSelectedDays([1, 2, 3, 4, 5]);
-                setAddAtTime('');
-                setUseTimeSchedule(false);
                 setMinCompletionTarget(50); // Reset to default
-            }
-
-            // Initialize strike fields if editing template
-            if (task && 'isActive' in task) {
-                const template = task as RepeatingTask;
-                setMinCompletionTarget(template.minCompletionTarget || 50);
             }
         }
     }, [open, task]);
 
-    const handleDayToggle = (day: number) => {
-        setSelectedDays(prev =>
-            prev.includes(day)
-                ? prev.filter(d => d !== day)
-                : [...prev, day].sort((a, b) => a - b)
-        );
-    };
-
     const handleSave = async () => {
-        const templateData = {
+        if (!user) return;
+
+        const templateData: Partial<TaskTemplate> = {
+            user_id: user.id,
             name,
-            priority,
+            priority: priority || 'normal',
             targetTime,
             description,
-            repeatPattern,
-            repeatDays: (repeatPattern === 'weekly' || repeatPattern === 'custom') ? selectedDays : undefined,
-            addAtTime: useTimeSchedule ? addAtTime : undefined,
-            strikeCount: 0, // Legacy field
-            minCompletionTarget, // Strike system
-            achieverStrike: 0,
-            fighterStrike: 0,
-            lastCompletedDate: undefined,
+            minCompletionTarget,
             isActive: true,
-            updatedAt: new Date(),
         };
 
         // Check if we're editing an existing template
-        const isEditingTemplate = task && 'isActive' in task && task.id;
+        const isEditingTemplate = task && 'isActive' in task && (task as TaskTemplate).id;
 
-        if (isEditingTemplate) {
-            // Update existing template (still Dexie for now?)
-            // The user only asked to migrate Settings/Categories/Priorities.
-            // Templates are not mentioned. So I keep Dexie for templates.
-            await db.repeatingTasks.update(task.id!, templateData);
-        } else {
-            // Create new template
-            await db.repeatingTasks.add({
-                ...templateData,
-                isDefault: false, // New templates are not default
-                createdAt: new Date(),
-            });
+        try {
+            if (isEditingTemplate) {
+                const templateId = (task as TaskTemplate).id!;
+                await updateTemplate(templateId, templateData);
+                toast.success("Template updated");
+            } else {
+                await createTemplate({
+                    ...templateData,
+                    isDefault: false,
+                    achieverStrike: 0,
+                    fighterStrike: 0
+                });
+                toast.success("Template created");
+            }
+
+            onOpenChange(false);
+
+            // Reset form
+            setName('');
+            setDescription('');
+
+            if (onSave) onSave();
+
+        } catch (error: any) {
+            console.error("Save failed", error);
+            toast.error("Failed to save template");
         }
-
-        onOpenChange(false);
-
-        // Reset form
-        setName('');
-        setDescription('');
-        setRepeatPattern('daily');
-        setSelectedDays([1, 2, 3, 4, 5]);
-        setAddAtTime('');
-        setUseTimeSchedule(false);
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden p-0 flex flex-col">
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden p-0 flex flex-col bg-card border-border">
                 <div className="px-6 pt-6 pb-2">
-                    <DialogTitle>{task && 'isActive' in task ? 'Edit Template' : 'Create Repeat Template'}</DialogTitle>
+                    <DialogTitle>{task && 'isActive' in task ? 'Edit Template' : 'Create Template'}</DialogTitle>
                     <DialogDescription>
-                        Configure a template that automatically creates tasks on a schedule
+                        Create a template to quickly add tasks to your plan
                     </DialogDescription>
                 </div>
 
-                <div className="overflow-y-auto px-6 py-4 flex-1">
+                <div className="overflow-y-auto px-6 py-4 flex-1 no-scrollbar">
                     <div className="space-y-4">
                         {/* Task Name */}
                         <div className="space-y-2">
@@ -254,74 +223,6 @@ const RepeatScheduleDialog = ({ open, onOpenChange, task }: RepeatScheduleDialog
                                 rows={2}
                             />
                         </div>
-
-                        {/* Repeat Pattern */}
-                        <div className="space-y-2">
-                            <Label>Repeat Pattern</Label>
-                            <Select value={repeatPattern} onValueChange={(v: any) => setRepeatPattern(v)}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="daily">Every Day</SelectItem>
-                                    <SelectItem value="weekly">Specific Days of Week</SelectItem>
-                                    <SelectItem value="custom">Custom Days</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Days of Week Selection */}
-                        {(repeatPattern === 'weekly' || repeatPattern === 'custom') && (
-                            <div className="space-y-2">
-                                <Label>Select Days</Label>
-                                <div className="flex gap-2 flex-wrap">
-                                    {DAYS_OF_WEEK.map((day) => (
-                                        <button
-                                            key={day.value}
-                                            type="button"
-                                            onClick={() => handleDayToggle(day.value)}
-                                            className={cn(
-                                                "px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                                                selectedDays.includes(day.value)
-                                                    ? "bg-primary text-primary-foreground"
-                                                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                                            )}
-                                        >
-                                            {day.label}
-                                        </button>
-                                    ))}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    {selectedDays.length === 0
-                                        ? 'No days selected'
-                                        : `Repeats on: ${selectedDays.map(d => DAYS_OF_WEEK[d].fullLabel).join(', ')}`}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Time Schedule (Optional) */}
-                        <div className="space-y-2">
-                            <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="use-time"
-                                    checked={useTimeSchedule}
-                                    onCheckedChange={(checked) => setUseTimeSchedule(checked as boolean)}
-                                />
-                                <Label htmlFor="use-time" className="cursor-pointer">
-                                    Add at specific time (optional)
-                                </Label>
-                            </div>
-                            {useTimeSchedule && (
-                                <TimePicker
-                                    value={addAtTime}
-                                    onChange={setAddAtTime}
-                                    placeholder="Select time"
-                                />
-                            )}
-                            <p className="text-xs text-muted-foreground">
-                                If enabled, task will be added at the specified time when you open the app
-                            </p>
-                        </div>
                     </div>
                 </div>
 
@@ -329,7 +230,7 @@ const RepeatScheduleDialog = ({ open, onOpenChange, task }: RepeatScheduleDialog
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button onClick={handleSave} disabled={!name || ((repeatPattern === 'weekly' || repeatPattern === 'custom') && selectedDays.length === 0)}>
+                    <Button onClick={handleSave} disabled={!name}>
                         {task && 'isActive' in task ? 'Save Changes' : 'Create Template'}
                     </Button>
                 </div>

@@ -1,16 +1,15 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useState, useEffect } from 'react';
 import {
     FileText,
     ChevronDown,
     Plus,
     MoreVertical,
-    Repeat,
     Flag,
     Edit,
     Copy,
     Trash2,
     FileIcon,
+    Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,61 +19,108 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { db, type RepeatingTask } from '@/lib/db';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+    fetchTemplates,
+    createTemplate,
+    updateTemplate,
+    deleteTemplate,
+    fetchBundles,
+    type TaskTemplate,
+    type TaskBundle
+} from '@/services/templateService';
 import RepeatScheduleDialog from './RepeatScheduleDialog';
+import BundleSettingsDialog from './BundleSettingsDialog';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface TemplateDropdownProps {
-    onTemplateSelect?: (template: RepeatingTask | null) => void;
+    onTemplateSelect?: (template: any) => void;
 }
 
 const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
+    const { user } = useAuth();
     const [open, setOpen] = useState(false);
     const [repeatDialogOpen, setRepeatDialogOpen] = useState(false);
-    const [selectedTemplate, setSelectedTemplate] = useState<RepeatingTask | undefined>();
-    const [editingTemplate, setEditingTemplate] = useState<RepeatingTask | undefined>();
 
-    // Fetch all templates (Cross-compatible with Cloud if we migrate)
-    const templates = useLiveQuery(
-        async () => {
-            if (!db.repeatingTasks) return [];
-            const allTasks = await db.repeatingTasks.toArray();
-            return allTasks.filter(t => t.isActive);
-        },
-        []
-    );
+    // Data State
+    const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+    const [bundles, setBundles] = useState<TaskBundle[]>([]);
 
-    const defaultTemplate = templates?.find(t => t.isDefault);
+    const [selectedTemplate, setSelectedTemplate] = useState<TaskTemplate | undefined>();
+    const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | undefined>();
 
-    const handleSetDefault = async (template: RepeatingTask) => {
-        // Unset all other defaults
-        await db.repeatingTasks.toCollection().modify({ isDefault: false });
+    // Fetch Data
+    useEffect(() => {
+        if (open && user) {
+            loadData();
+        }
+    }, [open, user]);
 
-        // Set this one as default
-        if (template.id) {
-            await db.repeatingTasks.update(template.id, { isDefault: true });
+    const loadData = async () => {
+        if (!user) return;
+        try {
+            const [t, b] = await Promise.all([
+                fetchTemplates(user.id),
+                fetchBundles(user.id)
+            ]);
+            setTemplates(t || []);
+            setBundles(b || []);
+        } catch (error) {
+            console.error("Failed to load templates", error);
         }
     };
 
-    const handleEdit = (template: RepeatingTask) => {
+    const defaultTemplate = templates?.find(t => t.isDefault);
+
+    const handleSetDefault = async (template: TaskTemplate) => {
+        if (!template.id) return;
+        try {
+            // Unset all locally to update UI faster? Or just reload
+            await Promise.all(templates.map(t => {
+                if (t.isDefault) return updateTemplate(t.id!, { isDefault: false });
+                return Promise.resolve();
+            }));
+
+            await updateTemplate(template.id, { isDefault: true });
+            toast.success("Default template updated");
+            loadData();
+        } catch (e) {
+            toast.error("Failed to set default");
+        }
+    };
+
+    const handleEdit = (template: TaskTemplate) => {
         setEditingTemplate(template);
         setRepeatDialogOpen(true);
     };
 
-    const handleDuplicate = async (template: RepeatingTask) => {
-        await db.repeatingTasks.add({
-            ...template,
-            id: undefined,
-            name: `${template.name} (Copy)`,
-            isDefault: false,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        });
+    const handleDuplicate = async (template: TaskTemplate) => {
+        if (!user) return;
+        try {
+            await createTemplate({
+                ...template,
+                user_id: user.id,
+                name: `${template.name} (Copy)`,
+                isDefault: false,
+                isActive: true
+            });
+            toast.success("Template duplicated");
+            loadData();
+        } catch (e) {
+            toast.error("Failed to duplicate");
+        }
     };
 
-    const handleDelete = async (template: RepeatingTask) => {
-        if (template.id) {
-            await db.repeatingTasks.delete(template.id);
+    const handleDelete = async (template: TaskTemplate) => {
+        if (!template.id) return;
+        if (!confirm("Are you sure you want to delete this template?")) return;
+        try {
+            await deleteTemplate(template.id);
+            toast.success("Template deleted");
+            loadData();
+        } catch (e) {
+            toast.error("Failed to delete");
         }
     };
 
@@ -83,15 +129,30 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
         setRepeatDialogOpen(true);
     };
 
-    const handleRepeat = (template: RepeatingTask) => {
+    const handleRepeat = (template: TaskTemplate) => {
         setSelectedTemplate(template);
         setRepeatDialogOpen(true);
     };
 
-    const handleTemplateClick = async (template: RepeatingTask | null) => {
+    const handleTemplateClick = async (template: any | null) => {
         if (onTemplateSelect) {
             await onTemplateSelect(template);
         }
+        setOpen(false);
+    };
+
+    const handleBundleClick = async (bundle: any) => {
+        if (!onTemplateSelect || !bundle.items) return;
+
+        // Items are ordered by DB query in service
+        const sortedItems = bundle.items.sort((a: any, b: any) => a.order_index - b.order_index);
+
+        for (const item of sortedItems) {
+            if (item.template) {
+                await onTemplateSelect(item.template);
+            }
+        }
+        toast.success(`Bundle "${bundle.name}" added`);
         setOpen(false);
     };
 
@@ -105,16 +166,41 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
                         <ChevronDown className="h-4 w-4 ml-2" />
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                    {/* New Template Button */}
+                <DropdownMenuContent align="end" className="w-64 max-h-[400px] overflow-y-auto custom-scrollbar">
+                    {/* New Template / Manage Bundles */}
                     <DropdownMenuItem onClick={handleNewTemplate} className="cursor-pointer">
                         <Plus className="h-4 w-4 mr-2" />
                         <span className="font-medium">New template</span>
                     </DropdownMenuItem>
 
+                    <BundleSettingsDialog onBundlesUpdated={loadData} />
+
                     <DropdownMenuSeparator />
 
-                    {/* Empty Template (Basic Task) */}
+                    {/* BUNDLES SECTION */}
+                    {bundles.length > 0 && (
+                        <>
+                            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Bundles</div>
+                            {bundles.map(bundle => (
+                                <DropdownMenuItem
+                                    key={bundle.id}
+                                    onClick={() => handleBundleClick(bundle)}
+                                    className="cursor-pointer flex items-center justify-between group"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: bundle.color }} />
+                                        <span>{bundle.name}</span>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground group-hover:block hidden">
+                                        {bundle.items?.length || 0} tasks
+                                    </span>
+                                </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                        </>
+                    )}
+
+                    {/* Empty Template */}
                     <div className="px-2 py-1.5 flex items-center justify-between hover:bg-muted rounded-sm cursor-pointer group" onClick={() => handleTemplateClick(null)}>
                         <div className="flex items-center gap-2 flex-1">
                             <FileIcon className="h-4 w-4 text-muted-foreground" />
@@ -135,23 +221,7 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    onClick={() => handleSetDefault({
-                                        name: 'Empty',
-                                        priority: 'normal',
-                                        targetTime: 60,
-                                        description: '',
-                                        repeatPattern: 'daily',
-                                        strikeCount: 0,
-                                        isActive: true,
-                                        isDefault: true,
-                                        createdAt: new Date(),
-                                        // Fix: Add missing gamification fields
-                                        minCompletionTarget: 60,
-                                        achieverStrike: 0,
-                                        fighterStrike: 0,
-                                    })}
-                                >
+                                <DropdownMenuItem onClick={() => toast.info("Can't set default on empty yet")}>
                                     <Flag className="h-4 w-4 mr-2" />
                                     Set as default
                                 </DropdownMenuItem>
@@ -163,6 +233,7 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
                     {templates && templates.length > 0 && (
                         <>
                             <DropdownMenuSeparator />
+                            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Templates</div>
                             {templates.map((template) => (
                                 <div
                                     key={template.id}
@@ -190,10 +261,6 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRepeat(template); }}>
-                                                <Repeat className="h-4 w-4 mr-2" />
-                                                Repeat
-                                            </DropdownMenuItem>
                                             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleSetDefault(template); }}>
                                                 <Flag className="h-4 w-4 mr-2" />
                                                 Set as default
@@ -223,11 +290,13 @@ const TemplateDropdown = ({ onTemplateSelect }: TemplateDropdownProps) => {
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Repeat Schedule Dialog */}
+            {/* Repeat Schedule Dialog - Adapted for Cloud Templates if needed */}
+            {/* Note: RepeatScheduleDialog likely needs updates to support cloud templates too, or we just pass the object and it works if interface matches */}
             <RepeatScheduleDialog
                 open={repeatDialogOpen}
                 onOpenChange={setRepeatDialogOpen}
                 task={editingTemplate as any}
+                onSave={loadData} // Pass a callback to reload data after save
             />
         </>
     );

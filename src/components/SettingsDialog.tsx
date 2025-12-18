@@ -303,7 +303,7 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto no-scrollbar">
                 <DialogHeader>
                     <DialogTitle>Settings</DialogTitle>
                     <DialogDescription>
