@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Settings } from 'lucide-react';
+import { Plus, Trash2, Settings, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 // CLOUD-ONLY MODE
 import { type Session, type Task, formatDuration, calculateDuration, getDateString, type Category } from '@/lib/db';
@@ -63,6 +63,17 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Sorting State
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() => {
+    const saved = localStorage.getItem('execution_table_sort_order');
+    return (saved === 'asc' || saved === 'desc') ? saved : 'asc';
+  });
+
+  // Persist sort order
+  useEffect(() => {
+    localStorage.setItem('execution_table_sort_order', sortOrder);
+  }, [sortOrder]);
 
   // 🔥 FIX: Track session IDs to prevent duplicates
   const [sessionIds, setSessionIds] = useState<Map<number, string>>(new Map());
@@ -230,13 +241,13 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
 
     // Find the latest end time from existing sessions
     // sort by end time to find the true last one
-    const sortedSessions = [...sessions].sort((a, b) => {
+    const sortedByEnd = [...sessions].sort((a, b) => {
       const endA = a.endTime.split(':').map(Number);
       const endB = b.endTime.split(':').map(Number);
       return (endA[0] * 60 + endA[1]) - (endB[0] * 60 + endB[1]);
     });
 
-    const lastSession = sortedSessions[sortedSessions.length - 1];
+    const lastSession = sortedByEnd[sortedByEnd.length - 1];
 
     let defaultStart = currentHHMM;
     // If we have a last session, start where it ended. 
@@ -402,6 +413,22 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
   const workCategories = categories?.filter(c => c.type === 'work') || [];
   const lifeCategories = categories?.filter(c => c.type === 'life') || [];
 
+  // Derived state for sorting
+  const sortedSessions = [...sessions].sort((a, b) => {
+    const timeToMinutes = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    };
+    const startA = timeToMinutes(a.startTime);
+    const startB = timeToMinutes(b.startTime);
+
+    return sortOrder === 'asc' ? startA - startB : startB - startA;
+  });
+
+  const toggleSort = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
   return (
     <motion.div
       className="notion-card overflow-hidden"
@@ -419,7 +446,21 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
                 Session
               </th>
               <th className="min-w-[140px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Category</th>
-              <th className="min-w-[120px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Start</th>
+              {/* Clickable Sort Header for Start Time */}
+              <th
+                className="min-w-[120px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap cursor-pointer hover:bg-muted/50 transition-colors group select-none"
+                onClick={toggleSort}
+                title={`Sort by Start Time (${sortOrder === 'asc' ? 'Ascending' : 'Descending'})`}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Start
+                  {sortOrder === 'asc' ? (
+                    <ArrowUp className="h-3 w-3 text-muted-foreground/70" />
+                  ) : (
+                    <ArrowDown className="h-3 w-3 text-muted-foreground/70" />
+                  )}
+                </div>
+              </th>
               <th className="min-w-[120px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">End</th>
               <th className="min-w-[80px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Duration</th>
               <th className="min-w-[300px] px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Notes</th>
@@ -428,8 +469,8 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
           </thead>
 
           <tbody className="divide-y divide-border/50">
-            <AnimatePresence mode="popLayout">
-              {sessions?.map((session, index) => {
+            <AnimatePresence mode="popLayout" initial={false}>
+              {sortedSessions?.map((session, index) => {
                 const duration = calculateDuration(session.startTime, session.endTime);
                 const selectValue = `${session.categoryType}:${session.category} `;
 
@@ -439,12 +480,12 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
                 return (
                   <motion.tr
                     key={session.id}
-                    layout
+                    layout // Enable layout animation for reordering
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.2, delay: index * 0.05 }}
-                    className="hover:bg-muted/20 transition-colors group relative" // relative for potential absolute error positioning
+                    transition={{ duration: 0.2 }}
+                    className="hover:bg-muted/20 transition-colors group relative"
                   >
                     {/* Session (Task Link or Custom Name) - Sticky Left 0 */}
                     <td className="min-w-[250px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
