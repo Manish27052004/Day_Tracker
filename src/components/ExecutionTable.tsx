@@ -50,9 +50,10 @@ const DescriptionInput = ({ sessionId, initialDescription, selectedDate, onUpdat
 
 interface ExecutionTableProps {
   selectedDate: Date;
+  wakeUpTime?: string;
 }
 
-const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
+const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
   const dateString = getDateString(selectedDate);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { user } = useAuth();
@@ -223,15 +224,40 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
       return;
     }
 
-    // Default times
-    const defaultStart = '09:00';
-    const defaultEnd = '10:00';
+    // Get current time in HH:mm format
+    const now = new Date();
+    const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    // Validate Check with null ID since it's a new session
-    if (isTimeOverlapping(defaultStart, defaultEnd, null)) {
-      alert("Cannot add session: The default time (09:00 - 10:00) overlaps with an existing session. Please adjust existing sessions first.");
-      return;
+    // Find the latest end time from existing sessions
+    // sort by end time to find the true last one
+    const sortedSessions = [...sessions].sort((a, b) => {
+      const endA = a.endTime.split(':').map(Number);
+      const endB = b.endTime.split(':').map(Number);
+      return (endA[0] * 60 + endA[1]) - (endB[0] * 60 + endB[1]);
+    });
+
+    const lastSession = sortedSessions[sortedSessions.length - 1];
+
+    let defaultStart = currentHHMM;
+    // If we have a last session, start where it ended. 
+    // OTHERWISE (first session), start at wakeUpTime if available, else current time.
+    if (lastSession) {
+      defaultStart = lastSession.endTime;
+    } else if (wakeUpTime) {
+      defaultStart = wakeUpTime;
     }
+
+    // End time is always "now" (or same as start if start > now? No, user said "End time also same with time.now()")
+    let defaultEnd = currentHHMM;
+
+    // Small DX improvement: if start > end (e.g. last session ended in future?), set end = start
+    // But user strictly said: "End time also same with time.now()"
+    // So we stick to that. 
+
+    // We REMOVE the blocking overlap check here. 
+    // If defaults overlap, the user will see the visual warning on the new row and can adjust.
+    // This prevents the "Cannot add session" block.
+
 
     // Default to first 'work' category if available, else 'Deep Work'
     const defaultCategory = categories.find(c => c.type === 'work') || categories[0] || { name: 'Deep Work', type: 'work' };
@@ -293,20 +319,10 @@ const ExecutionTable = ({ selectedDate }: ExecutionTableProps) => {
       const newEnd = updates.endTime || oldSession.endTime;
 
       if (isTimeOverlapping(newStart, newEnd, Number(id))) {
-        // Allow local state update so user sees what they typed, BUT show error?
-        // Or strictly block? User said: "Disable Save action". 
-        // Since we auto-save, blocking DB update = Disable Save.
-        // We will allow the local UI to update (for feedback) but prevent DB write, 
-        // AND maybe trigger a toast/alert or rely on the red text UI.
-
-        console.warn("Validation Error: Overlapping time detected. DB Update prevented.");
-        // We Update LOCAL state to show the overlap (so UI turns red)
-        setSessions(prev =>
-          prev.map(s =>
-            s.id === id ? { ...s, ...updates } : s
-          )
-        );
-        return; // 🛑 EXIT, Do not save to DB
+        // NON-BLOCKING WARNING:
+        // We log it, but we ALLOW the update to proceed.
+        // The UI will show the red "Time overlaps" warning.
+        console.warn("Validation Warning: Overlapping time detected.");
       }
     }
 

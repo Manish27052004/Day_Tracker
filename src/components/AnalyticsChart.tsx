@@ -56,12 +56,27 @@ const AnalyticsChart = () => {
     to: new Date(),
   });
 
-  const [viewMode, setViewMode] = useState<'type' | 'category'>('category');
+  const [viewMode, setViewMode] = useState<'type' | 'category'>(() => {
+    return (localStorage.getItem('analytics_view_mode') as 'type' | 'category') || 'category';
+  });
+
   const [dbCategories, setDbCategories] = useState<AnalyticsCategory[]>([]);
   const [dbTypes, setDbTypes] = useState<AnalyticsCategoryType[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]); // IDs of selected categories/types
   const [goals, setGoals] = useState<AnalyticsGoal[]>([]);
-  const [showArchived, setShowArchived] = useState(false);
+
+  const [showArchived, setShowArchived] = useState(() => {
+    return localStorage.getItem('analytics_show_archived') === 'true';
+  });
+
+  // Persist preferences
+  useEffect(() => {
+    localStorage.setItem('analytics_view_mode', viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem('analytics_show_archived', String(showArchived));
+  }, [showArchived]);
 
   // Computed: Selected Names (to handle duplicates by name in Legend/Logic)
   // Placeholder - Removed as we will define selectedNames correctly after displayCategories
@@ -100,11 +115,27 @@ const AnalyticsChart = () => {
         setDbCategories(finalCats);
         setDbTypes(types);
 
-        // Select all by default
-        if (viewMode === 'category') {
-          setSelectedIds(finalCats.map(c => c.id));
+        // Load persisted selection or Select all by default
+        const persistedSelection = localStorage.getItem(`analytics_selected_ids_${viewMode}`);
+
+        if (persistedSelection) {
+          try {
+            setSelectedIds(JSON.parse(persistedSelection));
+          } catch (e) {
+            // Fallback to select all if parse fails
+            if (viewMode === 'category') {
+              setSelectedIds(finalCats.map(c => c.id));
+            } else {
+              setSelectedIds(types.map(t => t.id));
+            }
+          }
         } else {
-          setSelectedIds(types.map(t => t.id));
+          // Default: Select all
+          if (viewMode === 'category') {
+            setSelectedIds(finalCats.map(c => c.id));
+          } else {
+            setSelectedIds(types.map(t => t.id));
+          }
         }
       } catch (error) {
         console.error("Failed to load metadata", error);
@@ -286,6 +317,13 @@ const AnalyticsChart = () => {
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
+
+  // Persist selected IDs
+  useEffect(() => {
+    if (selectedIds.length > 0) {
+      localStorage.setItem(`analytics_selected_ids_${viewMode}`, JSON.stringify(selectedIds));
+    }
+  }, [selectedIds, viewMode]);
 
   const toggleAll = () => {
     const allIds = viewMode === 'category'

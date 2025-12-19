@@ -31,7 +31,14 @@ const DEFAULT_COLORS: Record<string, string> = {
 
 const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownProps) => {
     const { user } = useAuth();
-    const [viewMode, setViewMode] = useState<ViewMode>('CATEGORY');
+    const [viewMode, setViewMode] = useState<ViewMode>(() => {
+        return (localStorage.getItem('daily_breakdown_view_mode') as ViewMode) || 'CATEGORY';
+    });
+
+    // Persist viewMode
+    useEffect(() => {
+        localStorage.setItem('daily_breakdown_view_mode', viewMode);
+    }, [viewMode]);
 
     // Cloud Data State
     const [sessions, setSessions] = useState<any[]>([]);

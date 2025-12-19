@@ -17,9 +17,17 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [activePhase, setActivePhase] = useState<Phase>('planning');
+  // Initialize phase from localStorage
+  const [activePhase, setActivePhase] = useState<Phase>(() => {
+    return (localStorage.getItem('last_active_phase') as Phase) || 'planning';
+  });
   const { fetchDateData, processSyncQueue } = useSync();
   const { user } = useAuth();
+
+  // Persist phase changes
+  useEffect(() => {
+    localStorage.setItem('last_active_phase', activePhase);
+  }, [activePhase]);
 
   // Auto-generate tasks from templates for TODAY only
   useTemplateGenerator();
@@ -134,7 +142,7 @@ const Index = () => {
       case 'planning':
         return <PlanningTable selectedDate={selectedDate} />;
       case 'execution':
-        return <ExecutionTable selectedDate={selectedDate} />;
+        return <ExecutionTable selectedDate={selectedDate} wakeUpTime={sleepEntry?.wakeUpTime} />;
       case 'breakdown':
         return (
           <DailyBreakdown
