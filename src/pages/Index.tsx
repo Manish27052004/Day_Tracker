@@ -151,45 +151,44 @@ const Index = () => {
           />
         );
       default:
-        return null;
+        // Fallback to ensure we never render nothing if state is wonky
+        return <PlanningTable selectedDate={selectedDate} />;
     }
   };
 
   return (
-    <>
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Date Controller */}
-        <DateController
-          selectedDate={selectedDate}
-          onDateChange={setSelectedDate}
-        />
+    <div className="container mx-auto px-4 py-8 max-w-6xl w-full">
+      {/* Date Controller */}
+      <DateController
+        selectedDate={selectedDate}
+        onDateChange={setSelectedDate}
+      />
 
-        {/* Sleep Tracker */}
-        <SleepTracker
-          wakeUpTime={sleepEntry?.wakeUpTime || ''}
-          bedTime={sleepEntry?.bedTime || ''}
-          onWakeUpChange={handleWakeUpChange}
-          onBedTimeChange={handleBedTimeChange}
-        />
+      {/* Sleep Tracker */}
+      <SleepTracker
+        wakeUpTime={sleepEntry?.wakeUpTime || ''}
+        bedTime={sleepEntry?.bedTime || ''}
+        onWakeUpChange={handleWakeUpChange}
+        onBedTimeChange={handleBedTimeChange}
+      />
 
-        {/* Phase Navigation */}
-        <PhaseNavigation
-          activePhase={activePhase}
-          onPhaseChange={setActivePhase}
-        />
+      {/* Phase Navigation */}
+      <PhaseNavigation
+        activePhase={activePhase}
+        onPhaseChange={setActivePhase}
+      />
 
-        {/* Phase Content */}
-        <motion.div
-          key={activePhase}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.3 }}
-        >
-          {renderPhaseContent()}
-        </motion.div>
-      </main>
-    </>
+      {/* Phase Content */}
+      <motion.div
+        key={activePhase}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ duration: 0.3 }}
+      >
+        {renderPhaseContent()}
+      </motion.div>
+    </div>
   );
 };
 
