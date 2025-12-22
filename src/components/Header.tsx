@@ -7,10 +7,19 @@ import AuthStatus from './AuthStatus';
 
 const Header = () => {
   const location = useLocation();
+  const path = location.pathname;
+
+  // Determine base path for links
+  // If we are in "All" mode (path starts with /all), we keep that prefix.
+  // Otherwise default to /tracker context.
+  const isAllMode = path.startsWith('/all');
+
+  const homeLink = isAllMode ? '/all/tracker' : '/tracker';
+  const analyticsLink = isAllMode ? '/all/analytics' : '/tracker/analytics';
 
   const links = [
-    { to: '/', label: 'Home', icon: LayoutDashboard },
-    { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+    { to: homeLink, label: 'Home', icon: LayoutDashboard },
+    { to: analyticsLink, label: 'Analytics', icon: BarChart3 },
   ];
 
   return (
@@ -23,7 +32,7 @@ const Header = () => {
       <div className="container mx-auto px-4 py-3 max-w-6xl">
         <div className="flex items-center justify-between gap-4">
           {/* App Title */}
-          <Link to="/" className="flex items-center gap-2 group">
+          <Link to={homeLink} className="flex items-center gap-2 group">
             <img src="/logo.png" alt="Logo" className="h-8 w-8 transition-transform group-hover:scale-105" />
             <h1 className="text-lg font-semibold text-foreground hidden sm:block">
               Daily Tracker

@@ -1,12 +1,15 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+
+type AuthFlow = 'login' | 'register';
 
 interface AuthContextType {
     user: User | null;
     session: Session | null;
     loading: boolean;
-    signInWithGoogle: () => Promise<void>;
+    signInWithGoogle: (flow: AuthFlow) => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -38,25 +41,76 @@ export function AuthProvider({ children }: AuthProviderProps) {
     useEffect(() => {
         // Get initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setLoading(false);
+            handleSession(session);
         });
 
         // Listen for auth changes
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setLoading(false);
+            handleSession(session);
         });
 
         return () => subscription.unsubscribe();
     }, []);
 
-    const signInWithGoogle = async () => {
+    const handleSession = async (session: Session | null) => {
+        if (!session?.user) {
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+            return;
+        }
+
+        // Logic to validate "Strict Auth"
+        // 1. Check if we have a pending auth flow in local storage
+        const pendingFlow = localStorage.getItem('auth_flow') as AuthFlow | null;
+
+        // If no pending flow (e.g. strict refresh), we just respect the session unless logic demands otherwise.
+
+        if (pendingFlow) {
+            const user = session.user;
+            const createdAt = new Date(user.created_at);
+            const now = new Date();
+            // User is "new" if created within the last 2 minutes
+            const isNewUser = (now.getTime() - createdAt.getTime()) < 2 * 60 * 1000;
+
+            if (pendingFlow === 'login') {
+                if (isNewUser) {
+                    // ERROR: User tried to LOGIN but didn't exist (until now)
+                    console.warn("Strict Auth: New user attempted Login.");
+                    await supabase.auth.signOut();
+                    toast.error("Account does not exist. Please Sign Up first.");
+                    localStorage.removeItem('auth_flow');
+                    setSession(null);
+                    setUser(null);
+                    setLoading(false);
+                    return; // Stop processing
+                }
+                // Success: Old user logged in
+            } else if (pendingFlow === 'register') {
+                if (!isNewUser) {
+                    // INFO: User tried to REGISTER but already exists
+                    console.info("Strict Auth: Existing user attempted Register.");
+                    toast.info("Account already exists. Logging you in...");
+                }
+                // Success: New user registered OR Old user let in
+            }
+
+            // Clean up
+            localStorage.removeItem('auth_flow');
+        }
+
+        setSession(session);
+        setUser(session.user);
+        setLoading(false);
+    };
+
+    const signInWithGoogle = async (flow: AuthFlow) => {
         try {
+            // Store the flow type to check after redirect
+            localStorage.setItem('auth_flow', flow);
+
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {

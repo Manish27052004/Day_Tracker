@@ -15,7 +15,7 @@ const AuthStatus = () => {
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground truncate max-w-[150px]">
-                        {user.email}
+                        {user.user_metadata?.full_name || 'User'}
                     </span>
                 </div>
                 <Button
