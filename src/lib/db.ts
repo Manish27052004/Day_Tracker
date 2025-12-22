@@ -57,6 +57,10 @@ export interface RepeatingTask {
   repeatDays?: number[]; // 0=Sunday, 1=Monday, ..., 6=Saturday (for weekly/custom)
   addAtTime?: string; // HH:mm format - optional time when task should be added
 
+  category?: string;
+  categoryType?: 'work' | 'life';
+  color?: string;
+
   // Template metadata
   isDefault: boolean; // Flag for default template
   icon?: string; // Optional icon for template

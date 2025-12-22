@@ -119,7 +119,23 @@ export const fetchBundles = async (userId: string) => {
         .order('created_at', { ascending: true });
 
     if (error) throw error;
-    return data;
+    if (error) throw error;
+
+    // Process the data to map nested template fields to camelCase
+    return data.map(bundle => ({
+        ...bundle,
+        items: bundle.items.map((item: any) => ({
+            ...item,
+            template: item.template ? {
+                ...item.template,
+                targetTime: item.template.target_time,
+                repeatPattern: item.template.repeat_pattern,
+                isActive: item.template.is_active,
+                isDefault: item.template.is_default,
+                // Add other mapped fields if necessary, consistent with fetchTemplates
+            } : null
+        }))
+    }));
 };
 
 export const createBundle = async (userId: string, name: string, color: string, templateIds: number[]) => {
