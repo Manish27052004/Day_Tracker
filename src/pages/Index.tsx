@@ -14,7 +14,6 @@ import { useTemplateGenerator } from '@/hooks/useTemplateGenerator';
 import { useSync } from '@/hooks/useSync';
 import { syncData } from '@/services/SyncManager';
 import { useAuth } from '@/contexts/AuthContext';
-
 const Index = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   // Initialize phase from localStorage
@@ -53,40 +52,40 @@ const Index = () => {
         }
       }
     };
-
+  
     // Initial sync when component mounts or user logs in
     runSync();
   }, [user]);
-
+  
   // Sync when coming back online
   useEffect(() => {
     const handleOnline = () => {
       console.log('🌐 Back online - triggering sync...');
       syncData();
     };
-
+  
     const handleOffline = () => {
       console.log('📴 Offline - sync will resume when connection restored');
     };
-
+  
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
+  
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
-
+  
   // Periodic sync every 30 seconds (when online and authenticated)
   useEffect(() => {
     if (!user || !navigator.onLine) return;
-
+  
     const syncInterval = setInterval(async () => {
       console.log('⏰ Periodic sync...');
       await syncData();
     }, 30000); // 30 seconds
-
+  
     return () => clearInterval(syncInterval);
   }, [user]);
   */
@@ -157,49 +156,40 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
+    <>
       <main className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Date Controller */}
+        <DateController
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+        />
+
+        {/* Sleep Tracker */}
+        <SleepTracker
+          wakeUpTime={sleepEntry?.wakeUpTime || ''}
+          bedTime={sleepEntry?.bedTime || ''}
+          onWakeUpChange={handleWakeUpChange}
+          onBedTimeChange={handleBedTimeChange}
+        />
+
+        {/* Phase Navigation */}
+        <PhaseNavigation
+          activePhase={activePhase}
+          onPhaseChange={setActivePhase}
+        />
+
+        {/* Phase Content */}
         <motion.div
-          className="space-y-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
+          key={activePhase}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.3 }}
         >
-          {/* Date Controller */}
-          <DateController
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-          />
-
-          {/* Sleep Tracker */}
-          <SleepTracker
-            wakeUpTime={sleepEntry?.wakeUpTime || ''}
-            bedTime={sleepEntry?.bedTime || ''}
-            onWakeUpChange={handleWakeUpChange}
-            onBedTimeChange={handleBedTimeChange}
-          />
-
-          {/* Phase Navigation */}
-          <PhaseNavigation
-            activePhase={activePhase}
-            onPhaseChange={setActivePhase}
-          />
-
-          {/* Phase Content */}
-          <motion.div
-            key={activePhase}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3 }}
-          >
-            {renderPhaseContent()}
-          </motion.div>
+          {renderPhaseContent()}
         </motion.div>
       </main>
-    </div>
+    </>
   );
 };
 

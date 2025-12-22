@@ -1,9 +1,17 @@
 import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+<<<<<<< HEAD
 import { CalendarClock, Users, ArrowLeft, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
+=======
+import { CalendarClock, Users, LogOut, LayoutDashboard } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { useEffect, useState } from 'react';
+import Header from '@/components/Header';
+>>>>>>> new
 
 const MainLayout = () => {
     const location = useLocation();
@@ -15,6 +23,7 @@ const MainLayout = () => {
     useEffect(() => {
         const path = location.pathname;
         if (path.includes('/tracker')) {
+<<<<<<< HEAD
             // Check if we are in "all" mode (user came from /all redirect) or strict tracker mode
             // For simplicity, if the URL is /tracker, it's just tracker. 
             // BUT, if we are in "All Apps" mode, we want to show the nav.
@@ -36,6 +45,8 @@ const MainLayout = () => {
             // The "All" selection just navigates to /tracker, but with a special state/flag 
             // that says "Show Navigation".
 
+=======
+>>>>>>> new
             const isAllMode = location.pathname.startsWith('/all');
             if (isAllMode) setMode('all');
             else if (path.startsWith('/tracker')) setMode('tracker');
@@ -56,12 +67,28 @@ const MainLayout = () => {
     return (
         <div className="min-h-screen bg-background flex flex-col">
             {/* Top Navigation Bar - Only visible in "All" mode */}
+<<<<<<< HEAD
             {isAllMode && (
                 <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
                     <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
                         <div className="flex items-center gap-6">
                             <Link to="/select-mode" className="flex items-center gap-2 font-bold text-lg text-primary mr-4 hover:opacity-80 transition-opacity">
                                 <ArrowLeft className="h-4 w-4" /> Modes
+=======
+            {isAllMode ? (
+                <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+                    <div className="container flex h-14 max-w-screen-2xl items-center justify-between">
+                        <div className="flex items-center gap-6">
+                            <Link to="/select-mode">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2 hidden sm:flex border-primary/20 hover:border-primary/50 hover:bg-primary/5 mr-4"
+                                >
+                                    <LayoutDashboard className="h-4 w-4" />
+                                    <span>Change Workspace</span>
+                                </Button>
+>>>>>>> new
                             </Link>
 
                             <nav className="flex items-center gap-1">
@@ -71,7 +98,11 @@ const MainLayout = () => {
                                         size="sm"
                                         className="gap-2"
                                     >
+<<<<<<< HEAD
                                         <CalendarClock className="h-4 w-4" /> Tracker
+=======
+                                        <CalendarClock className="h-4 w-4" /> Daily Tracker
+>>>>>>> new
                                     </Button>
                                 </Link>
                                 <Link to="/all/attendance">
@@ -91,6 +122,11 @@ const MainLayout = () => {
                         </Button>
                     </div>
                 </header>
+<<<<<<< HEAD
+=======
+            ) : (
+                <Header />
+>>>>>>> new
             )}
 
             {/* Content Area */}
@@ -108,6 +144,7 @@ const MainLayout = () => {
                     </motion.div>
                 </AnimatePresence>
             </main>
+<<<<<<< HEAD
 
             {/* Floating Back Button for Single Modes */}
             {!isAllMode && (
@@ -119,6 +156,8 @@ const MainLayout = () => {
                     </Link>
                 </div>
             )}
+=======
+>>>>>>> new
         </div>
     );
 };

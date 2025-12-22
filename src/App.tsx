@@ -38,11 +38,14 @@ const PersistenceWrapper = ({ children }: { children: React.ReactNode }) => {
     }
   }, [location]);
 
+<<<<<<< HEAD
   // 2. Restore location: We only restore if we are hitting root AND authenticated
   // This logic is slightly tricky with the new flow. 
   // If user hits '/', we check auth. If auth, we might want to go to last visited OR select mode.
   // For now, let's keep it simple: If at root, let the ProtectedRoute logic handle it.
 
+=======
+>>>>>>> new
   return <>{children}</>;
 };
 
@@ -63,6 +66,17 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+<<<<<<< HEAD
+=======
+const RootRedirect = () => {
+  const mode = localStorage.getItem('selected_mode');
+  if (mode === 'all') return <Navigate to="/all/tracker" replace />;
+  if (mode === 'tracker') return <Navigate to="/tracker" replace />;
+  if (mode === 'attendance') return <Navigate to="/attendance" replace />;
+  return <Navigate to="/select-mode" replace />;
+};
+
+>>>>>>> new
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -82,7 +96,11 @@ const App = () => (
                 path="/"
                 element={
                   <ProtectedRoute>
+<<<<<<< HEAD
                     <Navigate to="/select-mode" replace />
+=======
+                    <RootRedirect />
+>>>>>>> new
                   </ProtectedRoute>
                 }
               />
@@ -115,6 +133,7 @@ const App = () => (
                 <Route path="/analytics" element={<Navigate to="/tracker/analytics" replace />} />
               </Route>
 
+<<<<<<< HEAD
               {/* 
                   Legacy/Utility Routes - typically part of Tracker.
                   If someone visits /analytics directly, they get the layout wrapper.
@@ -122,6 +141,8 @@ const App = () => (
                   For now, leaving it under the generic layout wrapper is fine.
               */}
 
+=======
+>>>>>>> new
               {/* Catch-all */}
               <Route path="*" element={<NotFound />} />
             </Routes>

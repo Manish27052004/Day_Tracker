@@ -4,6 +4,7 @@ import { RepeatingTask } from '@/lib/db';
 // Re-using RepeatingTask interface but extending for DB fields if needed
 export interface TaskTemplate extends RepeatingTask {
     user_id: string;
+    color?: string;
     // ensure optional fields from DB are handled
 }
 

@@ -9,7 +9,11 @@ const ModeSelection = () => {
     const modes = [
         {
             id: 'tracker',
+<<<<<<< HEAD
             title: 'Day Tracker',
+=======
+            title: 'Daily Tracker',
+>>>>>>> new
             description: 'Focus solely on managing your daily tasks and schedule.',
             icon: CalendarClock,
             color: 'from-blue-500 to-cyan-500',
@@ -28,7 +32,11 @@ const ModeSelection = () => {
         {
             id: 'all',
             title: 'All Apps',
+<<<<<<< HEAD
             description: 'Access both Day Tracker and Attendance Manager in one workspace.',
+=======
+            description: 'Access both Daily Tracker and Attendance Manager in one workspace.',
+>>>>>>> new
             icon: LayoutDashboard,
             color: 'from-orange-500 to-red-500',
             path: '/all',

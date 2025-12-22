@@ -50,6 +50,7 @@ export interface RepeatingTask {
   name: string;
   priority: string;
   targetTime: number;
+  category?: string;
   description: string;
 
   // Repeat configuration
