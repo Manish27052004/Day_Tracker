@@ -88,6 +88,7 @@ const MatrixDashboard = () => {
                     {selectedProfileId && (
                         <AddHabitDialog
                             profileId={selectedProfileId}
+                            existingTemplateIds={data?.items?.map((item: any) => item.template_id) || []}
                             onHabitAdded={() => queryClient.invalidateQueries({ queryKey: ['matrixData'] })}
                         />
                     )}

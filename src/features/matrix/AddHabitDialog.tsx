@@ -27,10 +27,11 @@ import { cn } from "@/lib/utils";
 
 interface AddHabitDialogProps {
     profileId: number | null;
+    existingTemplateIds: number[];
     onHabitAdded: () => void;
 }
 
-const AddHabitDialog: React.FC<AddHabitDialogProps> = ({ profileId, onHabitAdded }) => {
+const AddHabitDialog: React.FC<AddHabitDialogProps> = ({ profileId, existingTemplateIds, onHabitAdded }) => {
     const { user } = useAuth();
     const [open, setOpen] = useState(false);
     const [templates, setTemplates] = useState<TaskTemplate[]>([]);
@@ -109,17 +110,22 @@ const AddHabitDialog: React.FC<AddHabitDialogProps> = ({ profileId, onHabitAdded
                                     <CommandItem
                                         key={template.id}
                                         value={template.name}
-                                        onSelect={() => toggleSelection(template.id)}
+                                        onSelect={() => !existingTemplateIds.includes(template.id!) && toggleSelection(template.id)}
+                                        disabled={existingTemplateIds.includes(template.id!)}
+                                        className={cn(existingTemplateIds.includes(template.id!) && "opacity-50 cursor-not-allowed")}
                                     >
                                         <div className={cn(
                                             "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                                            selectedTemplateIds.includes(template.id!)
+                                            selectedTemplateIds.includes(template.id!) || existingTemplateIds.includes(template.id!)
                                                 ? "bg-primary text-primary-foreground"
                                                 : "opacity-50 [&_svg]:invisible"
                                         )}>
                                             <Check className={cn("h-4 w-4")} />
                                         </div>
                                         <span>{template.name}</span>
+                                        {existingTemplateIds.includes(template.id!) && (
+                                            <span className="ml-2 text-xs text-muted-foreground">(Added)</span>
+                                        )}
                                         {template.category && (
                                             <span className="ml-auto text-xs text-muted-foreground">{template.category}</span>
                                         )}
