@@ -16,10 +16,32 @@ import AddHabitDialog from './AddHabitDialog';
 const MatrixDashboard = () => {
     // Shared State
     const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
-    const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-        from: new Date(new Date().setDate(new Date().getDate() - 7)), // Last 7 days
-        to: new Date()
+    const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>(() => {
+        const saved = localStorage.getItem('matrixDateRange');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                return {
+                    from: new Date(parsed.from),
+                    to: new Date(parsed.to)
+                };
+            } catch (e) {
+                console.error("Failed to parse saved date range", e);
+            }
+        }
+        return {
+            from: new Date(new Date().setDate(new Date().getDate() - 7)), // Last 7 days
+            to: new Date()
+        };
     });
+
+    // Persist date range
+    React.useEffect(() => {
+        localStorage.setItem('matrixDateRange', JSON.stringify({
+            from: dateRange.from.toISOString(),
+            to: dateRange.to.toISOString()
+        }));
+    }, [dateRange]);
 
     // Data Fetching
     const { data, isLoading } = useQuery({
