@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 // import { motion, AnimatePresence } from 'framer-motion'; // Removed for stability
-import { CalendarClock, Users, LogOut, LayoutDashboard, BarChart3 } from 'lucide-react';
+import { CalendarClock, Users, LogOut, LayoutDashboard, BarChart3, Grid3X3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
@@ -85,7 +85,8 @@ const MainLayout = () => {
                             <nav className="flex items-center gap-1">
                                 {(location.pathname.includes('/tracker') ? [
                                     { to: '/all/tracker', label: 'Home', icon: LayoutDashboard },
-                                    { to: '/all/tracker/analytics', label: 'Analytics', icon: BarChart3 } // Needs BarChart3 import
+                                    { to: '/all/tracker/analytics', label: 'Analytics', icon: BarChart3 },
+                                    { to: '/all/tracker/matrix', label: 'Habit Matrix', icon: Grid3X3 }
                                 ] : [
                                     { to: '/all/attendance', label: 'Home', icon: LayoutDashboard },
                                     // { to: '/all/attendance/analytics', label: 'Analytics', icon: BarChart3 } // Placeholder

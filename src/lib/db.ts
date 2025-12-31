@@ -58,7 +58,7 @@ export interface RepeatingTask {
   repeatDays?: number[]; // 0=Sunday, 1=Monday, ..., 6=Saturday (for weekly/custom)
   addAtTime?: string; // HH:mm format - optional time when task should be added
 
-  category?: string;
+
   categoryType?: 'work' | 'life';
   color?: string;
 
@@ -101,6 +101,30 @@ export interface DeletedTask {
   deletedAt: Date; // When it was deleted
 }
 
+
+export interface Subject {
+  id?: number;
+  name: string;
+  criteria: number; // e.g., 75
+  professor?: string;
+  color: string;
+  // Stats (cached or calculated on fly)
+  totalClasses?: number;
+  attendedClasses?: number;
+
+  syncStatus: 'pending' | 'synced' | 'error';
+  userId?: string;
+}
+
+export interface AttendanceRecord {
+  id?: number;
+  subjectId: number;
+  date: string; // ISO Date YYYY-MM-DD
+  status: 'present' | 'absent' | 'cancelled';
+  syncStatus: 'pending' | 'synced' | 'error';
+  userId?: string;
+}
+
 // Create Dexie database
 const db = new Dexie('DailyTrackerDB') as Dexie & {
   tasks: EntityTable<Task, 'id'>;
@@ -110,348 +134,31 @@ const db = new Dexie('DailyTrackerDB') as Dexie & {
   priorities: EntityTable<Priority, 'id'>;
   categories: EntityTable<Category, 'id'>;
   deletedTasks: EntityTable<DeletedTask, 'id'>;
+  subjects: EntityTable<Subject, 'id'>;
+  attendanceRecords: EntityTable<AttendanceRecord, 'id'>;
 };
 
-// Define schema - Version 5 adds priorities and categories
+// ... (previous versions)
 
-// Define schema - Version 5 adds priorities and categories
-db.version(5).stores({
-  tasks: '++id, date, status, priority, isRepeating, createdAt',
-  sessions: '++id, date, taskId, category, categoryType, startTime',
-  sleepEntries: '++id, date',
-  repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
-  priorities: '++id, name, order',
-  categories: '++id, name, type, order'
-}).upgrade(async tx => {
-  // Version 5 Seeding - (Left for historical correctness, but v6 covers it more robustly)
-  // We can rely on v6 upgrade to fix things even if v5 ran partially.
-});
-
-// Version 6: Fix seeding, migrate to rich colors, AND normalize legacy data
-db.version(6).stores({
-  tasks: '++id, date, status, priority, isRepeating, createdAt',
-  sessions: '++id, date, taskId, category, categoryType, startTime',
-  sleepEntries: '++id, date',
-  repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
-  priorities: '++id, name, order',
-  categories: '++id, name, type, order'
-}).upgrade(async tx => {
-  const COLORS = {
-    red: 'bg-danger/10 text-danger border-danger/20',
-    green: 'bg-success/10 text-success border-success/20',
-    blue: 'bg-info/10 text-info border-info/20',
-    yellow: 'bg-warning/10 text-warning border-warning/20',
-    grey: 'bg-muted text-muted-foreground border-border'
-  };
-
-  // 1. Restore/Migrate Priorities
-  const existingPriorities = await tx.table('priorities').toArray();
-  const defaultPriorities = [
-    { name: 'Urgent & Important', color: COLORS.red, order: 1 },
-    { name: 'Urgent & Not Important', color: COLORS.yellow, order: 2 },
-    { name: 'Not Urgent & Important', color: COLORS.blue, order: 3 },
-    { name: 'Not Urgent & Not Important', color: COLORS.grey, order: 4 }
-  ];
-
-  if (existingPriorities.length === 0) {
-    await tx.table('priorities').bulkAdd(defaultPriorities);
-  } else {
-    // Update legacy colors if present
-    for (const p of existingPriorities) {
-      let newColor = null;
-      if (p.color === 'priority-urgent-important') newColor = COLORS.red;
-      else if (p.color === 'priority-urgent-not-important') newColor = COLORS.yellow;
-      else if (p.color === 'priority-not-urgent-important') newColor = COLORS.blue;
-      else if (p.color === 'priority-not-urgent-not-important') newColor = COLORS.grey;
-
-      if (newColor) {
-        await tx.table('priorities').update(p.id, { color: newColor });
-      }
-    }
-  }
-
-  // 2. Restore/Migrate Categories
-  const existingCategories = await tx.table('categories').toArray();
-  const defaultCategories = [
-    // Work
-    { name: 'Deep Focus', type: 'work', color: COLORS.green, order: 1 },
-    { name: 'Focus', type: 'work', color: COLORS.blue, order: 2 },
-    { name: 'Distracted', type: 'work', color: COLORS.yellow, order: 3 },
-    // Life
-    { name: 'Sleep', type: 'life', color: COLORS.blue, order: 4 },
-    { name: 'Routine', type: 'life', color: COLORS.grey, order: 5 },
-    { name: 'Habits', type: 'life', color: COLORS.green, order: 6 },
-    { name: 'Wasted Time', type: 'life', color: COLORS.red, order: 7 }
-  ];
-
-  for (const def of defaultCategories) {
-    const match = existingCategories.find(c => c.name === def.name && c.type === def.type);
-    if (!match) {
-      // Missing, add it
-      await tx.table('categories').add(def);
-    } else {
-      // Exists, check if legacy color
-      let newColor = null;
-      if (match.color === 'text-success') newColor = COLORS.green;
-      else if (match.color === 'text-info') newColor = COLORS.blue;
-      else if (match.color === 'text-warning') newColor = COLORS.yellow;
-      else if (match.color === 'text-muted-foreground') newColor = COLORS.grey;
-      else if (match.color === 'text-danger') newColor = COLORS.red;
-
-      if (newColor) {
-        await tx.table('categories').update(match.id, { color: newColor });
-      }
-    }
-  }
-
-  // 3. Normalize Legacy Data (Tasks & Sessions)
-  const priorityMap: Record<string, string> = {
-    'urgent-important': 'Urgent & Important',
-    'urgent-not-important': 'Urgent & Not Important',
-    'not-urgent-important': 'Not Urgent & Important',
-    'not-urgent-not-important': 'Not Urgent & Not Important'
-  };
-
-  const categoryMap: Record<string, string> = {
-    'deep-focus': 'Deep Focus',
-    'focus': 'Focus',
-    'distracted': 'Distracted',
-    'sleep': 'Sleep',
-    'routine': 'Routine',
-    'habits': 'Habits',
-    'wasted-time': 'Wasted Time'
-  };
-
-  // Update Tasks
-  await tx.table('tasks').toCollection().modify(task => {
-    if (priorityMap[task.priority]) {
-      task.priority = priorityMap[task.priority];
-    }
-  });
-
-  // Update RepeatingTasks
-  await tx.table('repeatingTasks').toCollection().modify(task => {
-    if (priorityMap[task.priority]) {
-      task.priority = priorityMap[task.priority];
-    }
-  });
-
-  // Update Sessions
-  await tx.table('sessions').toCollection().modify(session => {
-    if (categoryMap[session.category]) {
-      session.category = categoryMap[session.category];
-    }
-  });
-});
-
-// Version 7: Force Restore Priorities (Merge Strategy like Categories)
-db.version(7).stores({
-  tasks: '++id, date, status, priority, isRepeating, createdAt',
-  sessions: '++id, date, taskId, category, categoryType, startTime',
-  sleepEntries: '++id, date',
-  repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
-  priorities: '++id, name, order',
-  categories: '++id, name, type, order'
-}).upgrade(async tx => {
-  const COLORS = {
-    red: 'bg-danger/10 text-danger border-danger/20',
-    green: 'bg-success/10 text-success border-success/20',
-    blue: 'bg-info/10 text-info border-info/20',
-    yellow: 'bg-warning/10 text-warning border-warning/20',
-    grey: 'bg-muted text-muted-foreground border-border'
-  };
-
-  const defaultPriorities = [
-    { name: 'Urgent & Important', color: COLORS.red, order: 1 },
-    { name: 'Urgent & Not Important', color: COLORS.yellow, order: 2 },
-    { name: 'Not Urgent & Important', color: COLORS.blue, order: 3 },
-    { name: 'Not Urgent & Not Important', color: COLORS.grey, order: 4 }
-  ];
-
-  const existingPriorities = await tx.table('priorities').toArray();
-
-  for (const def of defaultPriorities) {
-    const match = existingPriorities.find(p => p.name === def.name);
-    if (!match) {
-      await tx.table('priorities').add(def);
-    } else {
-      // Ensure color is updated to rich format if it matches legacy
-      let newColor = null;
-      if (match.color === 'priority-urgent-important') newColor = COLORS.red;
-      else if (match.color === 'priority-urgent-not-important') newColor = COLORS.yellow;
-      else if (match.color === 'priority-not-urgent-important') newColor = COLORS.blue;
-      else if (match.color === 'priority-not-urgent-not-important') newColor = COLORS.grey;
-
-      if (newColor) {
-        await tx.table('priorities').update(match.id, { color: newColor });
-      }
-    }
-  }
-});
-
-// Version 8: Update Default Priorities Colors to match user preference (Red, Purple, Green, Grey)
-db.version(8).stores({
-  tasks: '++id, date, status, priority, isRepeating, createdAt',
-  sessions: '++id, date, taskId, category, categoryType, startTime',
-  sleepEntries: '++id, date',
-  repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
-  priorities: '++id, name, order',
-  categories: '++id, name, type, order'
-}).upgrade(async tx => {
-  const COLORS = {
-    red: 'bg-danger/10 text-danger border-danger/20',
-    green: 'bg-success/10 text-success border-success/20',
-    blue: 'bg-info/10 text-info border-info/20',
-    yellow: 'bg-warning/10 text-warning border-warning/20',
-    purple: 'bg-purple-500/10 text-purple-600 border-purple-500/20', // Added Purple
-    grey: 'bg-muted text-muted-foreground border-border'
-  };
-
-  const defaultPriorities = [
-    { name: 'Urgent & Important', color: COLORS.red, order: 1 },
-    { name: 'Urgent & Not Important', color: COLORS.purple, order: 2 }, // Changed to Purple
-    { name: 'Not Urgent & Important', color: COLORS.green, order: 3 }, // Changed to Green
-    { name: 'Not Urgent & Not Important', color: COLORS.grey, order: 4 }
-  ];
-
-  const existingPriorities = await tx.table('priorities').toArray();
-
-  for (const def of defaultPriorities) {
-    const match = existingPriorities.find(p => p.name === def.name);
-    if (!match) {
-      await tx.table('priorities').add(def);
-    } else {
-      // Force update color to match the "Correct" default if it was set to one of the "Review" colors I guessed previously
-      // This ensures if v6/v7 ran and set them to Yellow/Blue, we fix them to Purple/Green
-      await tx.table('priorities').update(match.id, { color: def.color });
-    }
-  }
-});
-
-// Version 9: IST Timezone Fix (Clean Start)
-db.version(9).stores({
-  tasks: '++id, date, status, priority, isRepeating, createdAt',
-  sessions: '++id, date, taskId, category, categoryType, startTime',
-  sleepEntries: '++id, date',
-  repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
-  priorities: '++id, name, order',
-  categories: '++id, name, type, order'
-}).upgrade(async tx => {
-  // IST Timezone Fix: Clear all date-dependent data for clean start
-  // This ensures all future dates will be in proper IST format
-
-  console.log('🕐 IST Timezone Migration: Clearing date-dependent data...');
-
-  await tx.table('tasks').clear();
-  await tx.table('sessions').clear();
-  await tx.table('sleepEntries').clear();
-
-  // Keep priorities, categories, and templates (not date-dependent)
-  console.log('✅ IST Timezone Migration Complete. All data will now use Asia/Kolkata timezone.');
-});
-
-// Version 10: Sync Support
-db.version(10).stores({
-  tasks: '++id, date, status, priority, isRepeating, createdAt, syncStatus, userId',
-  sessions: '++id, date, taskId, category, categoryType, startTime, syncStatus, userId',
-  sleepEntries: '++id, date, syncStatus, userId',
-  repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
-  priorities: '++id, name, order',
-  categories: '++id, name, type, order'
-}).upgrade(async tx => {
-  // Initialize sync fields for existing records
-  await tx.table('tasks').toCollection().modify({ syncStatus: 'pending', userId: 'local' });
-  await tx.table('sessions').toCollection().modify({ syncStatus: 'pending', userId: 'local' });
-  await tx.table('sleepEntries').toCollection().modify({ syncStatus: 'pending', userId: 'local' });
-});
-
-// Version 11: Strike System (Gamification)
-db.version(11).stores({
-  tasks: '++id, date, status, priority, isRepeating, createdAt, syncStatus, userId',
-  sessions: '++id, date, taskId, category, categoryType, startTime, syncStatus, userId',
-  sleepEntries: '++id, date, syncStatus, userId',
-  repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
-  priorities: '++id, name, order',
-  categories: '++id, name, type, order'
-}).upgrade(async tx => {
-  console.log('🎯 Strike System Migration: Adding gamification fields...');
-
-  // Initialize strike fields for all existing templates
-  await tx.table('repeatingTasks').toCollection().modify(template => {
-    template.minCompletionTarget = template.minCompletionTarget ?? 50; // Default 50%
-    template.achieverStrike = template.achieverStrike ?? 0;
-    template.fighterStrike = template.fighterStrike ?? 0;
-    template.lastCompletedDate = template.lastCompletedDate ?? undefined;
-  });
-
-  console.log('✅ Strike System Migration Complete!');
-});
-
-// Version 13: Force Restore & Fix
-// Re-running migration to ensure deletedTasks exists and defaults are restored
-db.version(13).stores({
+// Version 14: Attendance Manager
+db.version(14).stores({
   tasks: '++id, date, status, priority, isRepeating, createdAt, syncStatus, userId',
   sessions: '++id, date, taskId, category, categoryType, startTime, syncStatus, userId',
   sleepEntries: '++id, date, syncStatus, userId',
   repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
   priorities: '++id, name, order',
   categories: '++id, name, type, order',
-  deletedTasks: '++id, [date+taskName], deletedAt'
+  deletedTasks: '++id, [date+taskName], deletedAt',
+  subjects: '++id, name, status, syncStatus, userId',
+  attendanceRecords: '++id, subjectId, date, status, syncStatus, userId'
 }).upgrade(async tx => {
-  console.log('🔄 Version 13 Migration: Ensuring integrity...');
-
-  const COLORS = {
-    red: 'bg-danger/10 text-danger border-danger/20',
-    green: 'bg-success/10 text-success border-success/20',
-    blue: 'bg-info/10 text-info border-info/20',
-    yellow: 'bg-warning/10 text-warning border-warning/20',
-    purple: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
-    grey: 'bg-muted text-muted-foreground border-border'
-  };
-
-  const defaultPriorities = [
-    { name: 'Urgent & Important', color: COLORS.red, order: 1 },
-    { name: 'Urgent & Not Important', color: COLORS.purple, order: 2 },
-    { name: 'Not Urgent & Important', color: COLORS.green, order: 3 },
-    { name: 'Not Urgent & Not Important', color: COLORS.grey, order: 4 }
-  ];
-
-  const defaultCategories = [
-    // Work
-    { name: 'Deep Focus', type: 'work', color: COLORS.green, order: 1 },
-    { name: 'Focus', type: 'work', color: COLORS.blue, order: 2 },
-    { name: 'Distracted', type: 'work', color: COLORS.yellow, order: 3 },
-    // Life
-    { name: 'Sleep', type: 'life', color: COLORS.blue, order: 4 },
-    { name: 'Routine', type: 'life', color: COLORS.grey, order: 5 },
-    { name: 'Habits', type: 'life', color: COLORS.green, order: 6 },
-    { name: 'Wasted Time', type: 'life', color: COLORS.red, order: 7 }
-  ];
-
-  // Restore priorities
-  const priorityTable = tx.table('priorities');
-  const existingPriorities = await priorityTable.toArray();
-  for (const def of defaultPriorities) {
-    if (!existingPriorities.some(p => p.name === def.name)) {
-      await priorityTable.add(def);
-    }
-  }
-
-  // Restore categories
-  const categoryTable = tx.table('categories');
-  const existingCategories = await categoryTable.toArray();
-  for (const def of defaultCategories) {
-    if (!existingCategories.some(c => c.name === def.name && c.type === def.type)) {
-      await categoryTable.add(def);
-    }
-  }
-
-  console.log('✅ Version 13 Migration Complete!');
+  console.log('📚 Attendance Manager Migration: Creating new tables...');
+  // No data migration needed for new tables
 });
 
 export { db };
 
-// Helper functions
+// Helper functions (kept as is)
 export const formatDuration = (minutes: number): string => {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;

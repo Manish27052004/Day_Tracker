@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Repeat, CalendarCheck, ArrowRightLeft } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Repeat, CalendarCheck, ArrowRightLeft, Grid3X3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import AuthStatus from './AuthStatus';
@@ -23,6 +23,8 @@ const Header = () => {
   const links = [
     { to: mode === 'attendance' ? '/attendance' : '/tracker', label: 'Home', icon: LayoutDashboard },
     { to: mode === 'attendance' ? '/attendance/analytics' : '/tracker/analytics', label: 'Analytics', icon: BarChart3 },
+    // Only show Matrix for tracker mode for now
+    ...(mode === 'tracker' ? [{ to: '/tracker/matrix', label: 'Habit Matrix', icon: Grid3X3 }] : []),
   ];
 
   return (
