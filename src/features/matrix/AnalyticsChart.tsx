@@ -7,10 +7,23 @@ import { CardDescription } from "@/components/ui/card";
 interface AnalyticsChartProps {
     profileId: number | null;
     range: { from: Date; to: Date };
+    totalTasks?: number;
     data?: { date: string; percentage: number }[]; // Optional for now until wired up
 }
 
-const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ profileId, range, data = [] }) => {
+const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ profileId, range, totalTasks = 0, data = [] }) => {
+    // Calculate ticks based on totalTasks
+    // e.g. 4 tasks -> 0, 25, 50, 75, 100 (100/4 = 25)
+    // e.g. 5 tasks -> 0, 20, 40, 60, 80, 100 (100/5 = 20)
+    const ticks = useMemo(() => {
+        if (!totalTasks) return [0, 25, 50, 75, 100];
+        const step = 100 / totalTasks;
+        const result = [];
+        for (let i = 0; i <= totalTasks; i++) {
+            result.push(Math.round(i * step));
+        }
+        return result;
+    }, [totalTasks]);
 
     // Generate empty data if none provided (for visual scaffolding)
     const chartData = useMemo(() => {
@@ -50,7 +63,7 @@ const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ profileId, range, data 
                         data={chartData}
                         margin={{
                             top: 5,
-                            right: 10,
+                            right: 30, // Increased to prevent date label cropping
                             left: -20,
                             bottom: 0,
                         }}
@@ -77,6 +90,8 @@ const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ profileId, range, data 
                             tickLine={false}
                             axisLine={false}
                             tickFormatter={(v) => `${v}%`}
+                            domain={[0, 100]}
+                            ticks={ticks}
                         />
                         <Tooltip
                             contentStyle={{

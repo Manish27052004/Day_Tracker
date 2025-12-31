@@ -182,6 +182,7 @@ const MatrixDashboard = () => {
                         <AnalyticsChart
                             profileId={selectedProfileId}
                             range={dateRange}
+                            totalTasks={data?.items.length || 0}
                             data={chartData}
                         />
                     </CardContent>

@@ -40,8 +40,8 @@ const MatrixGrid: React.FC<MatrixGridProps> = ({ profileId, range, data, onToggl
                             Task / Habit
                         </div>
                         {data.items.map((item) => (
-                            <div key={item.id} className="h-12 border-b flex items-center px-4 min-w-[200px] max-w-[200px] overflow-hidden text-sm font-medium">
-                                <span className="truncate" title={item.template?.name}>
+                            <div key={item.id} className="h-12 border-b flex items-center px-4 min-w-[200px] whitespace-nowrap text-sm font-medium hover:bg-muted/50 transition-colors">
+                                <span title={item.template?.name}>
                                     {item.template?.name || "Unknown"}
                                 </span>
                             </div>
