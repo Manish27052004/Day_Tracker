@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { fetchMatrixData, upsertTaskStatus } from "@/services/matrixService";
 import { format, eachDayOfInterval } from "date-fns";
 import { toast } from "sonner"; // Using sonner as per app convention seen in imports
@@ -56,15 +56,60 @@ const MatrixDashboard = () => {
     const queryClient = useQueryClient();
 
     // Interaction
-    const handleToggle = async (taskId: number | undefined, date: string, template: any, isCompleted: boolean) => {
-        try {
-            await upsertTaskStatus(taskId, date, template, isCompleted);
-            // Invalidate to refetch fresh data
-            await queryClient.invalidateQueries({ queryKey: ['matrixData'] });
-        } catch (error) {
-            console.error(error);
+    // Optimistic Mutation
+    const mutation = useMutation({
+        mutationFn: ({ taskId, date, template, isCompleted }: { taskId: number | undefined, date: string, template: any, isCompleted: boolean }) => {
+            return upsertTaskStatus(taskId, date, template, isCompleted);
+        },
+        onMutate: async ({ date, template, isCompleted }) => {
+            await queryClient.cancelQueries({ queryKey: ['matrixData'] });
+
+            const previousData = queryClient.getQueryData(['matrixData', selectedProfileId, dateRange.from, dateRange.to]);
+
+            queryClient.setQueryData(['matrixData', selectedProfileId, dateRange.from, dateRange.to], (old: any) => {
+                if (!old) return old;
+
+                const newStatus = isCompleted ? 'on-track' : 'lagging';
+                const existingTaskIndex = old.tasks.findIndex((t: any) => t.name === template.name && t.date === date);
+
+                const newTasks = [...old.tasks];
+
+                if (existingTaskIndex >= 0) {
+                    // Update existing
+                    newTasks[existingTaskIndex] = {
+                        ...newTasks[existingTaskIndex],
+                        status: newStatus
+                    };
+                } else {
+                    // Add new (simulated)
+                    newTasks.push({
+                        id: Math.random(), // Temp ID
+                        date: date,
+                        name: template.name,
+                        status: newStatus,
+                        progress: isCompleted ? 100 : 0
+                    });
+                }
+
+                return {
+                    ...old,
+                    tasks: newTasks
+                };
+            });
+
+            return { previousData };
+        },
+        onError: (err, newTodo, context) => {
+            queryClient.setQueryData(['matrixData', selectedProfileId, dateRange.from, dateRange.to], context?.previousData);
             toast.error("Failed to update status");
-        }
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ['matrixData'] });
+        },
+    });
+
+    const handleToggle = (taskId: number | undefined, date: string, template: any, isCompleted: boolean) => {
+        mutation.mutate({ taskId, date, template, isCompleted });
     };
 
     // Transform Data for Chart
