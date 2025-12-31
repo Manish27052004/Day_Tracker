@@ -11,6 +11,7 @@ import MatrixGrid from './MatrixGrid';
 import ProfileSelector from './ProfileSelector';
 import DateFilter from './DateFilter';
 import AnalyticsChart from './AnalyticsChart';
+import AddHabitDialog from './AddHabitDialog';
 
 const MatrixDashboard = () => {
     // Shared State
@@ -84,6 +85,12 @@ const MatrixDashboard = () => {
                     <p className="text-muted-foreground">Track your consistency across profiles.</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {selectedProfileId && (
+                        <AddHabitDialog
+                            profileId={selectedProfileId}
+                            onHabitAdded={() => queryClient.invalidateQueries({ queryKey: ['matrixData'] })}
+                        />
+                    )}
                     <ProfileSelector
                         selectedProfileId={selectedProfileId}
                         onSelect={setSelectedProfileId}
