@@ -3,16 +3,12 @@ import { useEffect } from 'react';
 export function useBackgroundReminders() {
     useEffect(() => {
         const registerPeriodicSync = async () => {
-            if ('serviceWorker' in navigator) {
+            // Check if serviceWorker and navigator are available (safe for SSR/environments)
+            if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
                 try {
                     const registration = await navigator.serviceWorker.ready;
 
-                    // Request Notification Permission
-                    if (Notification.permission === 'default') {
-                        await Notification.requestPermission();
-                    }
-
-                    // Register Periodic Sync
+                    // Periodic Sync Registration
                     // @ts-ignore
                     if (registration.periodicSync) {
                         try {
@@ -22,18 +18,23 @@ export function useBackgroundReminders() {
                             });
                             console.log('✅ Periodic Sync registered: execution-reminder');
                         } catch (error) {
-                            console.log('⚠️ Periodic Sync registration failed:', error);
+                            console.log('⚠️ Periodic Sync registration failed (common on non-PWA/non-HTTPS):', error);
                         }
                     } else {
                         console.log('ℹ️ Periodic Sync not supported in this browser');
                     }
 
                 } catch (error) {
-                    console.error('Error setting up background reminders:', error);
+                    console.error('Error during background reminder setup:', error);
                 }
             }
         };
 
-        registerPeriodicSync();
+        // Don't block the main thread - run after a short delay
+        const timer = setTimeout(() => {
+            registerPeriodicSync();
+        }, 1000);
+
+        return () => clearTimeout(timer);
     }, []);
 }
