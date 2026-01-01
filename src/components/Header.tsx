@@ -5,11 +5,13 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import AuthStatus from './AuthStatus';
 import { useEffect, useState } from 'react';
+import { useUserPreferences } from '@/contexts/UserPreferencesContext';
 
 const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'tracker' | 'attendance'>('tracker');
+  const { dayStartHour, setDayStartHour } = useUserPreferences();
 
   // Determine mode based on URL or local storage
   useEffect(() => {
@@ -54,6 +56,24 @@ const Header = () => {
                 <span>Change Workspace</span>
               </Button>
             </Link>
+
+            {/* [New] Day Start Selector */}
+            {mode === 'tracker' && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground hidden sm:block">Start:</span>
+                <select
+                  className="bg-background border border-border rounded text-xs px-2 py-1"
+                  value={dayStartHour}
+                  onChange={(e) => setDayStartHour(Number(e.target.value))}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Auth Button */}

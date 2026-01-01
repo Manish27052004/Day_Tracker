@@ -104,3 +104,42 @@ export function formatDateForDisplay(date: Date | string): string {
         year: 'numeric'
     });
 }
+
+/**
+ * Get the "logical" date based on a start hour offset.
+ * If the current time (or given time) hour is < startHour, it belongs to the previous day.
+ * 
+ * @param date - The date/time to check (defaults to now)
+ * @param startHour - The hour (0-23) when the day logically starts
+ * @returns Date object normalized to midnight of the logical date in IST
+ */
+export function getLogicalDate(date: Date = new Date(), startHour: number = 0): Date {
+    // Clone to avoid mutating original
+    const workingDate = new Date(date);
+
+    // Get hour in IST 
+    // Optimization: Since we are in an IST environment context (per file header),
+    // and we want to perform simple hour subtraction, we can adjust the underlying time.
+
+    // However, to be safe with timezone boundaries:
+    // 1. Convert to IST time string to know the "apparent" wall clock time
+    const istString = workingDate.toLocaleString("en-US", { timeZone: "Asia/Kolkata", hour12: false });
+    const istDate = new Date(istString);
+
+    const currentHour = istDate.getHours();
+
+    // 2. Logic: If currentHour < startHour, subtract 1 day from the date
+    if (currentHour < startHour) {
+        workingDate.setTime(workingDate.getTime() - 24 * 60 * 60 * 1000);
+    }
+
+    // 3. Return the midnight version of this logical date
+    return parseISTDate(formatToIST(workingDate));
+}
+
+/**
+ * Get the logical date string (YYYY-MM-DD)
+ */
+export function getLogicalDateString(date: Date = new Date(), startHour: number = 0): string {
+    return formatToIST(getLogicalDate(date, startHour));
+}

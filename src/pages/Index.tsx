@@ -9,13 +9,18 @@ import PlanningTable from '@/components/PlanningTable';
 import ExecutionTable from '@/components/ExecutionTable';
 import DailyBreakdown from '@/components/DailyBreakdown';
 import { db } from '@/lib/db';
-import { formatToIST } from '@/utils/dateUtils';
+import { formatToIST, getLogicalDate } from '@/utils/dateUtils';
 import { useTemplateGenerator } from '@/hooks/useTemplateGenerator';
 import { useSync } from '@/hooks/useSync';
 import { syncData } from '@/services/SyncManager';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUserPreferences } from '@/contexts/UserPreferencesContext';
+
 const Index = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const { dayStartHour } = useUserPreferences();
+
+  // Initialize with logical date (e.g., if 2 AM and start is 4 AM -> Yesterday)
+  const [selectedDate, setSelectedDate] = useState(() => getLogicalDate(new Date(), dayStartHour));
   // Initialize phase from localStorage
   const [activePhase, setActivePhase] = useState<Phase>(() => {
     return (localStorage.getItem('last_active_phase') as Phase) || 'planning';
@@ -148,6 +153,7 @@ const Index = () => {
             selectedDate={selectedDate}
             wakeUpTime={sleepEntry?.wakeUpTime}
             bedTime={sleepEntry?.bedTime}
+            dayStartHour={dayStartHour}
           />
         );
       default:

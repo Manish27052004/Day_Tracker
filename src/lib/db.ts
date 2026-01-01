@@ -178,7 +178,13 @@ export const parseDuration = (str: string): number => {
 export const calculateDuration = (startTime: string, endTime: string): number => {
   const [startH, startM] = startTime.split(':').map(Number);
   const [endH, endM] = endTime.split(':').map(Number);
-  return (endH * 60 + endM) - (startH * 60 + startM);
+  let diff = (endH * 60 + endM) - (startH * 60 + startM);
+
+  // Handle overnight sessions (crossing midnight)
+  if (diff < 0) {
+    diff += 24 * 60;
+  }
+  return diff;
 };
 
 /**

@@ -13,6 +13,7 @@ interface DailyBreakdownProps {
     selectedDate: Date;
     wakeUpTime?: string;
     bedTime?: string;
+    dayStartHour?: number;
 }
 
 // Default color mappings
@@ -27,9 +28,10 @@ const DEFAULT_COLORS: Record<string, string> = {
     'WORK': '#3b82f6',
     'LIFE': '#8b5cf6',
     'Untracked': '#e5e7eb',
+    'Uncategorized': '#9ca3af', // fallback
 };
 
-const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownProps) => {
+const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }: DailyBreakdownProps) => {
     const { user } = useAuth();
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
         return (localStorage.getItem('daily_breakdown_view_mode') as ViewMode) || 'CATEGORY';
@@ -240,6 +242,7 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime }: DailyBreakdownPro
                 viewMode,
                 categoryColors,
                 categoryTypeMap, // 🔥 PASSING DYNAMIC MAP
+                dayStartHour,
             });
         } catch (error) {
             console.error('Error generating chart data:', error);

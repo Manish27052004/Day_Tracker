@@ -105,9 +105,11 @@ export function generateChartData({
     viewMode,
     categoryColors = {},
     categoryTypeMap = {},
-}: Omit<GenerateChartDataParams, 'dayStartTime'>): ChartSlice[] {
-    // Step 1: Define chart boundaries (Strictly 00:00 to 24:00 of selected date)
+    dayStartHour = 0, // 🔥 New param
+}: GenerateChartDataParams & { dayStartHour?: number }): ChartSlice[] {
+    // Step 1: Define chart boundaries (Strictly startHour to startHour + 24h of selected date)
     const chartStart = startOfDay(currentDate);
+    chartStart.setHours(dayStartHour, 0, 0, 0); // Offset start
     const chartEnd = addHours(chartStart, 24);
 
     const slices: Array<{ name: string; category: string; start: Date; end: Date }> = [];

@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { useUserPreferences } from '@/contexts/UserPreferencesContext';
 
 // Component to manage description field with local state
 const DescriptionInput = ({ sessionId, initialDescription, selectedDate, onUpdate }: { sessionId: string; initialDescription: string; selectedDate: Date; onUpdate: (id: string, updates: Partial<Session>) => void }) => {
@@ -414,10 +415,14 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
   const lifeCategories = categories?.filter(c => c.type === 'life') || [];
 
   // Derived state for sorting
+  const { dayStartHour } = useUserPreferences();
+
   const sortedSessions = [...sessions].sort((a, b) => {
     const timeToMinutes = (t: string) => {
       const [h, m] = t.split(':').map(Number);
-      return h * 60 + m;
+      // 🔥 Adjustment for Day Start Time (e.g. if start is 4 AM, then 2 AM is treated as 26:00)
+      const adjustedH = h < dayStartHour ? h + 24 : h;
+      return adjustedH * 60 + m;
     };
     const startA = timeToMinutes(a.startTime);
     const startB = timeToMinutes(b.startTime);

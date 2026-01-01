@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { UserPreferencesProvider } from '@/contexts/UserPreferencesContext';
 import { useEffect } from "react";
 
 // Pages
@@ -72,63 +73,65 @@ const RootRedirect = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <PersistenceWrapper>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/debug" element={<DebugPage />} />
+      <UserPreferencesProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <PersistenceWrapper>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/debug" element={<DebugPage />} />
 
-              {/* Protected Routes */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <RootRedirect />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Protected Routes */}
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <RootRedirect />
+                    </ProtectedRoute>
+                  }
+                />
 
-              <Route
-                path="/select-mode"
-                element={
-                  <ProtectedRoute>
-                    <ModeSelection />
-                  </ProtectedRoute>
-                }
-              />
+                <Route
+                  path="/select-mode"
+                  element={
+                    <ProtectedRoute>
+                      <ModeSelection />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Layout Routes (Tracker, Attendance, All) */}
-              <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-                {/* Single App Views */}
-                <Route path="/tracker" element={<Index />} />
-                <Route path="/tracker/matrix" element={<MatrixDashboard />} />
-                <Route path="/tracker/analytics" element={<Analytics />} />
-                <Route path="/attendance" element={<Attendance />} />
+                {/* Layout Routes (Tracker, Attendance, All) */}
+                <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+                  {/* Single App Views */}
+                  <Route path="/tracker" element={<Index />} />
+                  <Route path="/tracker/matrix" element={<MatrixDashboard />} />
+                  <Route path="/tracker/analytics" element={<Analytics />} />
+                  <Route path="/attendance" element={<Attendance />} />
 
-                {/* 'All' Mode Views */}
-                <Route path="/all">
-                  <Route path="tracker" element={<Index />} />
-                  <Route path="tracker/matrix" element={<MatrixDashboard />} />
-                  <Route path="tracker/analytics" element={<Analytics />} />
-                  <Route path="attendance" element={<Attendance />} />
-                  <Route index element={<Navigate to="tracker" replace />} />
+                  {/* 'All' Mode Views */}
+                  <Route path="/all">
+                    <Route path="tracker" element={<Index />} />
+                    <Route path="tracker/matrix" element={<MatrixDashboard />} />
+                    <Route path="tracker/analytics" element={<Analytics />} />
+                    <Route path="attendance" element={<Attendance />} />
+                    <Route index element={<Navigate to="tracker" replace />} />
+                  </Route>
+
+                  {/* Fallback for legacy analytics link if any */}
+                  <Route path="/analytics" element={<Navigate to="/tracker/analytics" replace />} />
                 </Route>
 
-                {/* Fallback for legacy analytics link if any */}
-                <Route path="/analytics" element={<Navigate to="/tracker/analytics" replace />} />
-              </Route>
-
-              {/* Catch-all */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </PersistenceWrapper>
-        </BrowserRouter>
-      </TooltipProvider>
+                {/* Catch-all */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </PersistenceWrapper>
+          </BrowserRouter>
+        </TooltipProvider>
+      </UserPreferencesProvider>
     </AuthProvider>
   </QueryClientProvider>
 );
