@@ -1,5 +1,13 @@
 import { motion } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { LayoutDashboard, BarChart3, Repeat, CalendarCheck, ArrowRightLeft, Grid3X3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -45,18 +53,6 @@ const Header = () => {
               {mode === 'tracker' ? 'Daily Tracker' : 'Attendance Manager'}
             </h1>
 
-            {/* Change Workspace Button */}
-            <Link to="/select-mode">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 hidden sm:flex border-primary/20 hover:border-primary/50 hover:bg-primary/5"
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                <span>Change Workspace</span>
-              </Button>
-            </Link>
-
             {/* [New] Day Start Selector */}
             {mode === 'tracker' && (
               <div className="flex items-center gap-2">
@@ -74,6 +70,18 @@ const Header = () => {
                 </select>
               </div>
             )}
+
+            {/* Change Workspace Button */}
+            <Link to="/select-mode">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 hidden sm:flex border-primary/20 hover:border-primary/50 hover:bg-primary/5"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                <span>Change Workspace</span>
+              </Button>
+            </Link>
           </div>
 
           {/* Auth Button */}

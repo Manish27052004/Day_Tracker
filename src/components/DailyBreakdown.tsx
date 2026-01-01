@@ -248,7 +248,7 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
             console.error('Error generating chart data:', error);
             return [];
         }
-    }, [logs, selectedDate, wakeUpTime, bedTime, viewMode, categoryColors, categoryTypeMap]);
+    }, [logs, selectedDate, wakeUpTime, bedTime, viewMode, categoryColors, categoryTypeMap, dayStartHour]);
 
     // Calculate total tracked time (excluding "Untracked")
     const totalTrackedMinutes = useMemo(() => {

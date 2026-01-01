@@ -1,22 +1,21 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 interface UserPreferencesContextType {
-    dayStartHour: number; // 0-23
+    dayStartHour: number;
     setDayStartHour: (hour: number) => void;
 }
 
 const UserPreferencesContext = createContext<UserPreferencesContextType | undefined>(undefined);
 
-export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [dayStartHour, setDayStartHourState] = useState<number>(() => {
-        const stored = localStorage.getItem('dayStartHour');
-        return stored ? parseInt(stored, 10) : 0;
+export const UserPreferencesProvider = ({ children }: { children: React.ReactNode }) => {
+    const [dayStartHour, setDayStartHour] = useState<number>(() => {
+        const saved = localStorage.getItem('dayStartHour');
+        return saved ? parseInt(saved, 10) : 0;
     });
 
-    const setDayStartHour = (hour: number) => {
-        setDayStartHourState(hour);
-        localStorage.setItem('dayStartHour', hour.toString());
-    };
+    useEffect(() => {
+        localStorage.setItem('dayStartHour', dayStartHour.toString());
+    }, [dayStartHour]);
 
     return (
         <UserPreferencesContext.Provider value={{ dayStartHour, setDayStartHour }}>
