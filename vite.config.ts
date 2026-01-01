@@ -18,6 +18,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'logo.png'],
       manifest: {
@@ -43,8 +46,7 @@ export default defineConfig(({ mode }) => ({
           }
         ]
       },
-      workbox: {
-        // Caching strategies
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       }
     })
