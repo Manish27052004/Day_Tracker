@@ -8,6 +8,11 @@ export function useBackgroundReminders() {
                 try {
                     const registration = await navigator.serviceWorker.ready;
 
+                    // Request Notification Permission with user gesture fallback
+                    if (Notification.permission === 'default') {
+                        await Notification.requestPermission();
+                    }
+
                     // Periodic Sync Registration
                     // @ts-ignore
                     if (registration.periodicSync) {

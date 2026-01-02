@@ -107,18 +107,92 @@ const DebugPage = () => {
             });
         };
 
+
+        const testNotification = async () => {
+            if ('serviceWorker' in navigator) {
+                const registration = await navigator.serviceWorker.ready;
+                if (registration.active) {
+                    const channel = new MessageChannel();
+                    channel.port1.onmessage = (event) => {
+                        log('🔔 ' + event.data.log);
+                    };
+                    registration.active.postMessage({ type: 'TEST_NOTIFICATION' }, [channel.port2]);
+                }
+            }
+        };
+
+        const debugCheck = async () => {
+            if ('serviceWorker' in navigator) {
+                const registration = await navigator.serviceWorker.ready;
+                if (registration.active) {
+                    const channel = new MessageChannel();
+                    channel.port1.onmessage = (event) => {
+                        log('🔍 ' + (typeof event.data.log === 'string' ? event.data.log : JSON.stringify(event.data.log)));
+                    };
+                    registration.active.postMessage({ type: 'DEBUG_CHECK' }, [channel.port2]);
+                }
+            } else {
+                log('❌ No Service Worker found.');
+            }
+        };
+
         if (user) runCheck();
     }, [user]);
 
     return (
         <div className="p-8 font-mono text-xs whitespace-pre-wrap bg-gray-100 min-h-screen text-black">
             <div className="mb-4 space-x-4">
-                <button
-                    onClick={() => window.location.reload()}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                    Refresh Logs
-                </button>
+                <h1 className="text-lg font-bold mb-2">Background Sync Debug</h1>
+                <div className="flex gap-2 flex-wrap mb-4 border-b pb-4">
+                    <button
+                        // @ts-ignore
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                        Refresh Logs
+                    </button>
+                    <button
+                        // @ts-ignore
+                        onClick={async () => {
+                            if ('serviceWorker' in navigator) {
+                                const registration = await navigator.serviceWorker.ready;
+                                if (registration.active) {
+                                    const channel = new MessageChannel();
+                                    channel.port1.onmessage = (event) => {
+                                        // @ts-ignore
+                                        setLogs(prev => [...prev, '🔔 ' + event.data.log + '\n']);
+                                    };
+                                    registration.active.postMessage({ type: 'TEST_NOTIFICATION' }, [channel.port2]);
+                                }
+                            }
+                        }}
+                        className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600"
+                    >
+                        🔔 Test Notification
+                    </button>
+                    <button
+                        // @ts-ignore
+                        onClick={async () => {
+                            if ('serviceWorker' in navigator) {
+                                const registration = await navigator.serviceWorker.ready;
+                                if (registration.active) {
+                                    const channel = new MessageChannel();
+                                    channel.port1.onmessage = (event) => {
+                                        // @ts-ignore
+                                        setLogs(prev => [...prev, '🔍 ' + event.data.log + '\n']);
+                                    };
+                                    registration.active.postMessage({ type: 'DEBUG_CHECK' }, [channel.port2]);
+                                }
+                            } else {
+                                // @ts-ignore
+                                setLogs(prev => [...prev, '❌ No Service Worker found.\n']);
+                            }
+                        }}
+                        className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+                    >
+                        🔍 Force Background Check
+                    </button>
+                </div>
                 <button
                     onClick={runRepair}
                     className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
