@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserPreferencesProvider } from '@/contexts/UserPreferencesContext';
 import { useEffect } from "react";
 import { useBackgroundReminders } from "@/hooks/useBackgroundReminders";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/react";
 
 // Pages
 import Index from "./pages/Index";
@@ -81,6 +82,7 @@ const App = () => {
           <TooltipProvider>
             <Toaster />
             <Sonner />
+            <VercelAnalytics />
             <BrowserRouter>
               <PersistenceWrapper>
                 <Routes>
