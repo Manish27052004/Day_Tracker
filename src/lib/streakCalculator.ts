@@ -39,7 +39,9 @@ export async function calculateStreakForTask(
                 .select('min_completion_target')
                 .eq('id', templateId)
                 .maybeSingle(); // <--- SAFE: Returns null if not found (instead of 406 Error)
-            if (data) minTarget = data.min_completion_target;
+            if (data && data.min_completion_target !== null) {
+                minTarget = data.min_completion_target;
+            }
         }
         console.log(`   🎯 Target: ${minTarget}% | Fighter: >100%`);
 
