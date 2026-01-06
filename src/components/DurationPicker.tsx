@@ -57,7 +57,7 @@ const DurationPicker = ({ value, onChange, className }: DurationPickerProps) => 
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
