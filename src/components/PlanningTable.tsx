@@ -89,7 +89,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
           description: t.description || '',
           completedDescription: t.completed_description || '',
           progress: t.progress || 0,
-          isRepeating: t.is_repeating || false,
+
           // 🔥 Streak fields
           templateId: t.template_id,
           achieverStrike: t.achiever_strike || 0,
@@ -270,7 +270,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
 
   // === CLOUD-ONLY FUNCTIONS ===
 
-  const addTask = async (isRepeating: boolean = false) => {
+  const addTask = async () => {
     if (!user) {
       alert('Please sign in to add tasks');
       return;
@@ -287,7 +287,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       description: '',
       completed_description: '',
       progress: 0,
-      is_repeating: isRepeating,
+
       // is_deleted: false, // REMOVED - column doesn't exist in Supabase yet
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -314,7 +314,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
         description: insertedData.description || '',
         completedDescription: insertedData.completed_description || '',
         progress: insertedData.progress || 0,
-        isRepeating: insertedData.is_repeating || false
+
       };
 
       setTasks(prevTasks => [...prevTasks, taskConverted]);
@@ -398,7 +398,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       description: template.description || '',
       completed_description: '',
       progress: 0,
-      is_repeating: false,
+
       // 🔥 Save template_id so trigger can calculate streaks
       template_id: templateUuid,
       // Trigger will set these automatically based on yesterday's task
@@ -435,7 +435,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
         description: insertedData.description || '',
         completedDescription: insertedData.completed_description || '',
         progress: insertedData.progress || 0,
-        isRepeating: insertedData.is_repeating || false,
+
         // 🔥 Include streak data
         templateId: insertedData.template_id,
         achieverStrike: insertedData.achiever_strike || 0,
@@ -651,7 +651,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       >
         <Button
           variant="ghost"
-          onClick={() => addTask(false)}
+          onClick={() => addTask()}
           className="flex-1 justify-start text-muted-foreground hover:text-foreground transition-colors"
         >
           <Plus className="h-4 w-4 mr-2" />

@@ -124,7 +124,6 @@ async function pushTasks(userId: string, result: SyncResult): Promise<void> {
                     description: task.description || '',
                     completed_description: task.completedDescription || null,
                     progress: task.progress || 0,
-                    is_repeating: task.isRepeating || false,
                     is_deleted: task.isDeleted || false,
                     created_at: task.createdAt?.toISOString() || new Date().toISOString(),
                     updated_at: task.updatedAt?.toISOString() || new Date().toISOString()
@@ -285,7 +284,6 @@ async function pullTasks(userId: string, result: SyncResult): Promise<void> {
                     description: remoteTask.description || '',
                     completedDescription: remoteTask.completed_description || '',
                     progress: remoteTask.progress || 0,
-                    isRepeating: remoteTask.is_repeating || false,
                     isDeleted: remoteTask.is_deleted || false,
                     createdAt: new Date(remoteTask.created_at),
                     updatedAt: new Date(remoteTask.updated_at),

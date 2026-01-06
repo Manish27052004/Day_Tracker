@@ -12,7 +12,6 @@ export interface Task {
   description: string;
   completedDescription: string;
   progress: number; // 0-100+
-  isRepeating: boolean; // for daily repeating tasks
   createdAt: Date;
   updatedAt: Date;
   syncStatus: 'pending' | 'synced' | 'error';
@@ -142,7 +141,7 @@ const db = new Dexie('DailyTrackerDB') as Dexie & {
 
 // Version 14: Attendance Manager
 db.version(14).stores({
-  tasks: '++id, date, status, priority, isRepeating, createdAt, syncStatus, userId',
+  tasks: '++id, date, status, priority, createdAt, syncStatus, userId',
   sessions: '++id, date, taskId, category, categoryType, startTime, syncStatus, userId',
   sleepEntries: '++id, date, syncStatus, userId',
   repeatingTasks: '++id, isActive, createdAt, repeatPattern, isDefault',
@@ -257,7 +256,7 @@ export const generateTasksFromTemplates = async (targetDate: string): Promise<vo
       description: template.description,
       completedDescription: '',
       progress: 0,
-      isRepeating: true,
+
       createdAt: new Date(),
       updatedAt: new Date(),
       syncStatus: 'pending',

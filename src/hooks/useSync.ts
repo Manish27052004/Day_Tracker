@@ -17,7 +17,7 @@ const taskToSupabase = (task: Task, userId: string) => ({
     description: task.description || '',
     completed_description: task.completedDescription || '',
     progress: task.progress || 0,
-    is_repeating: task.isRepeating || false,
+
     created_at: task.createdAt?.toISOString() || new Date().toISOString(),
     updated_at: task.updatedAt?.toISOString() || new Date().toISOString()
 });
@@ -206,7 +206,7 @@ export const useSync = () => {
                             description: cTask.description || '',
                             completedDescription: cTask.completed_description || '',
                             progress: cTask.progress || 0,
-                            isRepeating: cTask.is_repeating || false,
+
                             createdAt: new Date(cTask.created_at),
                             updatedAt: new Date(cTask.updated_at),
                             syncStatus: 'synced',

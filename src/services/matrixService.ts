@@ -76,7 +76,7 @@ export const upsertTaskStatus = async (
                 priority: template.priority,
                 target_time: template.target_time || 60,
                 description: template.description,
-                is_repeating: true,
+
                 user_id: template.user_id
             });
         if (error) throw error;

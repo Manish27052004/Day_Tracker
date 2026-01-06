@@ -63,7 +63,7 @@ export async function migrateLocalDataToSupabase(): Promise<MigrationResult> {
                     description: task.description || '',
                     completed_description: task.completedDescription || null,
                     progress: task.progress || 0,
-                    is_repeating: task.isRepeating || false,
+
                     is_deleted: task.isDeleted || false,
                     created_at: task.createdAt || new Date().toISOString(),
                     updated_at: task.updatedAt || task.createdAt || new Date().toISOString()

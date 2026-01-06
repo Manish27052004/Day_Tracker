@@ -31,7 +31,7 @@ export interface SupabaseTask {
     description: string | null;
     completed_description: string | null;
     progress: number;
-    is_repeating: boolean;
+
     created_at: string;
     updated_at: string;
 }
