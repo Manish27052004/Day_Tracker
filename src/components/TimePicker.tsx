@@ -15,8 +15,7 @@ interface TimePickerProps {
   placeholder?: string;
 }
 
-const hours12 = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12
-const minutes = Array.from({ length: 60 }, (_, i) => i); // 0-59
+// 1-12 and 0-59 arrays are now generated inline for looping
 
 const formatTime = (hour: number, minute: number, period: 'AM' | 'PM'): string => {
   let hour24 = hour;
@@ -63,20 +62,25 @@ const TimePicker = ({ value, onChange, className, placeholder = 'Select time' }:
   useEffect(() => {
     if (open) {
       // Scroll to selected values when popover opens
+      // We use setTimeout to ensure rendering is complete (simple approach)
       setTimeout(() => {
         if (hourScrollRef.current) {
-          const selectedElement = hourScrollRef.current.querySelector('[data-selected="true"]');
-          if (selectedElement) {
-            selectedElement.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          const selectedElements = hourScrollRef.current.querySelectorAll(`[data-value="${selectedHour}"]`);
+          if (selectedElements.length > 0) {
+            // Scroll to the middle instance
+            const middleIndex = Math.floor(selectedElements.length / 2);
+            selectedElements[middleIndex]?.scrollIntoView({ block: 'center' }); // Removed smooth for instant positioning
           }
         }
         if (minuteScrollRef.current) {
-          const selectedElement = minuteScrollRef.current.querySelector('[data-selected="true"]');
-          if (selectedElement) {
-            selectedElement.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          const selectedElements = minuteScrollRef.current.querySelectorAll(`[data-value="${selectedMinute}"]`);
+          if (selectedElements.length > 0) {
+            // Scroll to the middle instance
+            const middleIndex = Math.floor(selectedElements.length / 2);
+            selectedElements[middleIndex]?.scrollIntoView({ block: 'center' });
           }
         }
-      }, 50);
+      }, 0);
     }
   }, [open]);
 
@@ -114,21 +118,25 @@ const TimePicker = ({ value, onChange, className, placeholder = 'Select time' }:
               className="flex-1 h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent border border-border rounded-md bg-muted/30"
             >
               <div className="py-12">
-                {hours12.map((h) => (
-                  <button
-                    key={h}
-                    data-selected={selectedHour === h}
-                    onClick={() => setSelectedHour(h)}
-                    className={cn(
-                      "w-full py-1.5 text-center text-sm transition-colors",
-                      selectedHour === h
-                        ? "bg-primary text-primary-foreground font-semibold"
-                        : "hover:bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {h.toString().padStart(2, '0')}
-                  </button>
-                ))}
+                {Array.from({ length: 12 * 50 }).map((_, i) => {
+                  const h = (i % 12) + 1;
+                  return (
+                    <button
+                      key={i}
+                      data-value={h}
+                      data-selected={selectedHour === h}
+                      onClick={() => setSelectedHour(h)}
+                      className={cn(
+                        "w-full py-1.5 text-center text-sm transition-colors",
+                        selectedHour === h
+                          ? "bg-primary text-primary-foreground font-semibold"
+                          : "hover:bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {h.toString().padStart(2, '0')}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -138,21 +146,25 @@ const TimePicker = ({ value, onChange, className, placeholder = 'Select time' }:
               className="flex-1 h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent border border-border rounded-md bg-muted/30"
             >
               <div className="py-12">
-                {minutes.map((m) => (
-                  <button
-                    key={m}
-                    data-selected={selectedMinute === m}
-                    onClick={() => setSelectedMinute(m)}
-                    className={cn(
-                      "w-full py-1.5 text-center text-sm transition-colors",
-                      selectedMinute === m
-                        ? "bg-primary text-primary-foreground font-semibold"
-                        : "hover:bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {m.toString().padStart(2, '0')}
-                  </button>
-                ))}
+                {Array.from({ length: 60 * 20 }).map((_, i) => {
+                  const m = i % 60;
+                  return (
+                    <button
+                      key={i}
+                      data-value={m}
+                      data-selected={selectedMinute === m}
+                      onClick={() => setSelectedMinute(m)}
+                      className={cn(
+                        "w-full py-1.5 text-center text-sm transition-colors",
+                        selectedMinute === m
+                          ? "bg-primary text-primary-foreground font-semibold"
+                          : "hover:bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {m.toString().padStart(2, '0')}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
