@@ -8,6 +8,7 @@ export interface Profile {
     name: string;
     description: string | null;
     is_default: boolean;
+    day_start_hour?: number; // New field for start hour sync
     created_at: string;
 }
 
