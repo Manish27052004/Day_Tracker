@@ -67,6 +67,7 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
 
     const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
     const [editCategoryName, setEditCategoryName] = useState('');
+    const [editCategoryType, setEditCategoryType] = useState('');
     const [editCategoryColor, setEditCategoryColor] = useState('');
 
     const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
@@ -268,7 +269,11 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
         const oldCategory = categories.find(c => c.id === editingCategoryId);
 
         const { error } = await supabase.from('categories')
-            .update({ name: editCategoryName, color: editCategoryColor })
+            .update({
+                name: editCategoryName,
+                type: editCategoryType,
+                color: editCategoryColor
+            })
             .eq('id', editingCategoryId)
             .eq('user_id', user.id);
 
@@ -277,9 +282,19 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
             return;
         }
 
-        // Cascade rename sessions
-        if (oldCategory && oldCategory.name !== editCategoryName) {
+        // Cascade updates to sessions if Name or Type changed
+        if (oldCategory && (oldCategory.name !== editCategoryName || oldCategory.type !== editCategoryType)) {
+            // Update all past sessions that used this category
             await supabase.from('sessions')
+                .update({
+                    category: editCategoryName,
+                    category_type: editCategoryType // Update the type as well
+                })
+                .eq('category', oldCategory.name)
+                .eq('user_id', user.id);
+
+            // Also update any Templates if they store category info (though they just reference name usually)
+            await supabase.from('task_templates')
                 .update({ category: editCategoryName })
                 .eq('category', oldCategory.name)
                 .eq('user_id', user.id);
@@ -482,6 +497,17 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                                     {editingCategoryId === c.id ? (
                                                         <div className="flex items-center gap-2 flex-1">
                                                             <Input value={editCategoryName} onChange={(e) => setEditCategoryName(e.target.value)} className="h-8 flex-1" />
+
+                                                            {/* EDIT CATEGORY TYPE */}
+                                                            <Select value={editCategoryType} onValueChange={setEditCategoryType}>
+                                                                <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
+                                                                <SelectContent>
+                                                                    {categoryTypes.map(t => (
+                                                                        <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+
                                                             <Select value={editCategoryColor} onValueChange={setEditCategoryColor}>
                                                                 <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
                                                                 <SelectContent>
@@ -495,7 +521,12 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                                         <>
                                                             <div className="flex items-center gap-3"><span className={cn("text-sm font-medium", c.color.split(' ')[1])}>{c.name}</span></div>
                                                             <div className="flex items-center gap-1">
-                                                                <Button variant="ghost" size="icon" onClick={() => { setEditingCategoryId(c.id!); setEditCategoryName(c.name); setEditCategoryColor(c.color); }}><Pencil className="h-4 w-4" /></Button>
+                                                                <Button variant="ghost" size="icon" onClick={() => {
+                                                                    setEditingCategoryId(c.id!);
+                                                                    setEditCategoryName(c.name);
+                                                                    setEditCategoryType(c.type); // Set initial type
+                                                                    setEditCategoryColor(c.color);
+                                                                }}><Pencil className="h-4 w-4" /></Button>
                                                                 <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(c.id!)}><Trash2 className="h-4 w-4" /></Button>
                                                             </div>
                                                         </>
