@@ -80,8 +80,15 @@ export const updateTemplate = async (id: number, updates: Partial<TaskTemplate>)
     if (updates.targetTime !== undefined) dbPayload.target_time = updates.targetTime;
     if (updates.repeatPattern !== undefined) dbPayload.repeat_pattern = updates.repeatPattern;
     if (updates.isActive !== undefined) dbPayload.is_active = updates.isActive;
-    if (updates.isDefault !== undefined) dbPayload.is_default = updates.isDefault;
-    // Add other fields as needed
+    if (updates.isDefault !== undefined) dbPayload.is_default = updates.isDefault; // Fixed bug here too if it was missing before or just consistent
+
+    // Fix: Add missing fields
+    if (updates.description !== undefined) dbPayload.description = updates.description;
+    if (updates.category !== undefined) dbPayload.category = updates.category;
+    if (updates.priority !== undefined) dbPayload.priority = updates.priority;
+    if (updates.color !== undefined) dbPayload.color = updates.color;
+    if (updates.icon !== undefined) dbPayload.icon = updates.icon;
+
 
     const { data, error } = await supabase
         .from('task_templates')
