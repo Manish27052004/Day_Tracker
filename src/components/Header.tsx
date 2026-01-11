@@ -12,6 +12,7 @@ import { LayoutDashboard, BarChart3, Repeat, CalendarCheck, ArrowRightLeft, Grid
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import AuthStatus from './AuthStatus';
+import { ModeToggle } from "@/components/mode-toggle";
 import { useEffect, useState } from 'react';
 import { useUserPreferences } from '@/contexts/UserPreferencesContext';
 
@@ -85,7 +86,10 @@ const Header = () => {
           </div>
 
           {/* Auth Button */}
-          <AuthStatus />
+          <div className="flex items-center gap-2">
+            <ModeToggle />
+            <AuthStatus />
+          </div>
         </div>
 
         {/* Bottom Row: Navigation */}

@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { getTodayIST, formatToIST } from '@/utils/dateUtils';
+import { getTodayIST, formatToIST } from '../utils/dateUtils';
 
 // Types for our database entities
 export interface Task {

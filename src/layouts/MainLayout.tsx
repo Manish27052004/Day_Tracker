@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
+import { ModeToggle } from "@/components/mode-toggle";
 
 const MainLayout = () => {
     const location = useLocation();
@@ -75,9 +76,12 @@ const MainLayout = () => {
                                 </nav>
                             </div>
 
-                            <Button variant="ghost" size="icon" onClick={() => signOut()} title="Sign Out">
-                                <LogOut className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <ModeToggle />
+                                <Button variant="ghost" size="icon" onClick={() => signOut()} title="Sign Out">
+                                    <LogOut className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
 
                         {/* Bottom Row: Sub-Navigation (Home | Analytics) */}
