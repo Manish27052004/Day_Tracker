@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { UserPreferencesProvider } from '@/contexts/UserPreferencesContext';
 import { useEffect } from "react";
 import { useBackgroundReminders } from "@/hooks/useBackgroundReminders";
+import { ThemeProvider } from "@/components/theme-provider";
 
 // Pages
 import Index from "./pages/Index";
@@ -76,68 +77,71 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <UserPreferencesProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <PersistenceWrapper>
-                <Routes>
-                  {/* Public Routes */}
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/debug" element={<DebugPage />} />
+      <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+        <AuthProvider>
+          <UserPreferencesProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <PersistenceWrapper>
+                  <Routes>
+                    {/* Public Routes */}
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/debug" element={<DebugPage />} />
 
-                  {/* Protected Routes */}
-                  <Route
-                    path="/"
-                    element={
-                      <ProtectedRoute>
-                        <RootRedirect />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Protected Routes */}
+                    <Route
+                      path="/"
+                      element={
+                        <ProtectedRoute>
+                          <RootRedirect />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  <Route
-                    path="/select-mode"
-                    element={
-                      <ProtectedRoute>
-                        <ModeSelection />
-                      </ProtectedRoute>
-                    }
-                  />
+                    <Route
+                      path="/select-mode"
+                      element={
+                        <ProtectedRoute>
+                          <ModeSelection />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Layout Routes (Tracker, Attendance, All) */}
-                  <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-                    {/* Single App Views */}
-                    <Route path="/tracker" element={<Index />} />
-                    <Route path="/tracker/matrix" element={<MatrixDashboard />} />
-                    <Route path="/tracker/analytics" element={<Analytics />} />
-                    <Route path="/attendance" element={<Attendance />} />
+                    {/* Layout Routes (Tracker, Attendance, All) */}
+                    <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+                      {/* Single App Views */}
+                      <Route path="/tracker" element={<Index />} />
+                      <Route path="/tracker/matrix" element={<MatrixDashboard />} />
+                      <Route path="/tracker/analytics" element={<Analytics />} />
+                      <Route path="/attendance" element={<Attendance />} />
 
-                    {/* 'All' Mode Views */}
-                    <Route path="/all">
-                      <Route path="tracker" element={<Index />} />
-                      <Route path="tracker/matrix" element={<MatrixDashboard />} />
-                      <Route path="tracker/analytics" element={<Analytics />} />
-                      <Route path="attendance" element={<Attendance />} />
-                      <Route index element={<Navigate to="tracker" replace />} />
+                      {/* 'All' Mode Views */}
+                      <Route path="/all">
+                        <Route path="tracker" element={<Index />} />
+                        <Route path="tracker/matrix" element={<MatrixDashboard />} />
+                        <Route path="tracker/analytics" element={<Analytics />} />
+                        <Route path="attendance" element={<Attendance />} />
+                        <Route index element={<Navigate to="tracker" replace />} />
+                      </Route>
+
+                      {/* Fallback for legacy analytics link if any */}
+                      <Route path="/analytics" element={<Navigate to="/tracker/analytics" replace />} />
                     </Route>
 
-                    {/* Fallback for legacy analytics link if any */}
-                    <Route path="/analytics" element={<Navigate to="/tracker/analytics" replace />} />
-                  </Route>
-
-                  {/* Catch-all */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </PersistenceWrapper>
-            </BrowserRouter>
-          </TooltipProvider>
+                    {/* Catch-all */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </PersistenceWrapper>
+              </BrowserRouter>
+            </TooltipProvider>
+          </UserPreferencesProvider>
         </UserPreferencesProvider>
       </AuthProvider>
-    </QueryClientProvider>
+    </ThemeProvider>
+    </QueryClientProvider >
   );
 };
 

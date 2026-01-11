@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectItem, SelectTrigger, SelectValue, SelectContent } from "@/components/ui/select";
+import { ModeToggle } from "@/components/mode-toggle";
 
 export interface SettingsDialogProps {
     open: boolean;
@@ -319,11 +320,17 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto no-scrollbar">
-                <DialogHeader>
-                    <DialogTitle>Settings</DialogTitle>
-                    <DialogDescription>
-                        Manage your planning priorities and execution categories.
-                    </DialogDescription>
+                <DialogHeader className="flex flex-row items-center justify-between pr-8">
+                    <div>
+                        <DialogTitle>Settings</DialogTitle>
+                        <DialogDescription>
+                            Manage your planning priorities and execution categories.
+                        </DialogDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Theme</span>
+                        <ModeToggle />
+                    </div>
                 </DialogHeader>
 
                 <Tabs defaultValue="priorities" className="w-full">
