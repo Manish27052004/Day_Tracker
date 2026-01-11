@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => ({
       strict: false,
     },
   },
+  build: {
+    minify: 'terser',
+  },
   plugins: [
     react(),
     mode === "development" && componentTagger(),

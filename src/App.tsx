@@ -138,9 +138,9 @@ const App = () => {
               </BrowserRouter>
             </TooltipProvider>
           </UserPreferencesProvider>
-        </UserPreferencesProvider>
-      </AuthProvider>
-    </ThemeProvider>
+
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider >
   );
 };
