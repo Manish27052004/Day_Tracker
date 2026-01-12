@@ -54,10 +54,10 @@ export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo:
     if (sessionsResult.error) throw sessionsResult.error;
     if (sleepResult.error) throw sleepResult.error;
 
-    // Filter out "Sleep" sessions from the sessions table to avoid double counting
-    // (Since we are generating them virtually from sleep_entries)
-    // Use case-insensitive check and trim to be safe
-    let allData = (sessionsResult.data as AnalyticsSession[]).filter(s => s.category?.trim().toLowerCase() !== 'sleep');
+    // Do NOT filter out "Sleep" sessions. 
+    // Manual sleep sessions (from Execution table) should take precedence or coexist.
+    // The subtractBusy logic later will ensure we don't double count if they overlap with calculated sleep.
+    let allData = (sessionsResult.data as AnalyticsSession[]);
     const rawSleepData = sleepResult.data || [];
 
     // Deduplicate Sleep Entries: Ensure only one entry per date (take the latest)
