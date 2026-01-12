@@ -83,6 +83,7 @@ interface GenerateChartDataParams {
     viewMode: ViewMode;
     categoryTypeMap?: Record<string, string>;
     categoryColors?: Record<string, string>;
+    dayStartHour?: number;
 }
 
 function parseTimeOnDate(timeStr: string, baseDate: Date): Date {
@@ -97,6 +98,16 @@ function parseTimeOnDate(timeStr: string, baseDate: Date): Date {
     }
 }
 
+// 🔥 Helper to parse time and applying logical day shift
+// If hour < dayStartHour, it belongs to the NEXT calendar day (i.e. late night of the current logical day)
+function parseTimeWithLogicalOffset(timeStr: string, baseDate: Date, dayStartHour: number): Date {
+    const date = parseTimeOnDate(timeStr, baseDate);
+    if (date.getHours() < dayStartHour) {
+        return addDays(date, 1);
+    }
+    return date;
+}
+
 export function generateChartData({
     logs,
     currentDate,
@@ -105,7 +116,7 @@ export function generateChartData({
     viewMode,
     categoryColors = {},
     categoryTypeMap = {},
-    dayStartHour = 0, // 🔥 New param
+    dayStartHour = 0,
 }: GenerateChartDataParams & { dayStartHour?: number }): ChartSlice[] {
     // Step 1: Define chart boundaries (Strictly startHour to startHour + 24h of selected date)
     const chartStart = startOfDay(currentDate);
@@ -114,12 +125,13 @@ export function generateChartData({
 
     const slices: Array<{ name: string; category: string; start: Date; end: Date }> = [];
 
-    // Step 2: Generate virtual sleep slices (Calendar Day Only)
+    // Step 2: Generate virtual sleep slices
     try {
-        // Morning sleep: 00:00 → wakeTime
+        // Morning sleep: chartStart → wakeTime
         if (wakeTime) {
-            const wakeDateTime = parseTimeOnDate(wakeTime, currentDate);
-            // Only add if wake time is after midnight
+            const wakeDateTime = parseTimeWithLogicalOffset(wakeTime, currentDate, dayStartHour);
+
+            // Only add if wake time is valid and after absolute start
             if (isAfter(wakeDateTime, chartStart) && isBefore(wakeDateTime, chartEnd)) {
                 slices.push({
                     name: 'Sleep',
@@ -127,13 +139,22 @@ export function generateChartData({
                     start: chartStart,
                     end: wakeDateTime,
                 });
+            } else if (isAfter(wakeDateTime, chartEnd)) {
+                // If wake time is arguably after the chart ends (e.g. slept 26 hours?), cap it
+                slices.push({
+                    name: 'Sleep',
+                    category: 'Sleep',
+                    start: chartStart,
+                    end: chartEnd,
+                });
             }
         }
 
-        // Night sleep: bedTime → 24:00
+        // Night sleep: bedTime → chartEnd
         if (bedTime) {
-            const bedDateTime = parseTimeOnDate(bedTime, currentDate);
-            // Only add if bed time is before midnight end
+            const bedDateTime = parseTimeWithLogicalOffset(bedTime, currentDate, dayStartHour);
+
+            // Only add if bed time is before chart end
             if (isAfter(bedDateTime, chartStart) && isBefore(bedDateTime, chartEnd)) {
                 slices.push({
                     name: 'Sleep',
@@ -141,6 +162,12 @@ export function generateChartData({
                     start: bedDateTime,
                     end: chartEnd,
                 });
+            } else if (isBefore(bedDateTime, chartStart)) {
+                // If bed time was before chart start (e.g. went to bed yesterday and still sleeping?), 
+                // typically handled by previous day logic, but here we just clamp or ignore.
+                // For a single day view, we care about sleep STARTING in this day.
+                // If bedTime < chartStart, it might mean we slept ALL day? Unlikely for this simple logic.
+                // Ignore.
             }
         }
     } catch (error) {
@@ -152,11 +179,22 @@ export function generateChartData({
         try {
             if (!log.startTime || !log.endTime) continue;
 
-            let logStart = parseTimeOnDate(log.startTime, currentDate);
-            let logEnd = parseTimeOnDate(log.endTime, currentDate);
+            let logStart = parseTimeWithLogicalOffset(log.startTime, currentDate, dayStartHour);
+            let logEnd = parseTimeWithLogicalOffset(log.endTime, currentDate, dayStartHour);
 
-            // SPECIAL CASE: Overnight tasks (e.g., 23:00 - 01:00)
-            // If end is before start, it implies it crosses midnight
+            // Check for overnight wrap-around (e.g. Start 23:00, End 05:00)
+            // Logic: If we already shifted end due to < startHour, it might be correct.
+            // But if end is STILL before start, it implies > 24h duration or heavy wrap.
+            // Example: Start 22:00 (Jan 12). End 05:00 (Jan 13, shifted because < 4). 
+            // Start < End. Correct.
+            // Example: Start 23:00 (Jan 12). End 01:00 (Jan 13, shifted because < 4).
+            // Start < End. Correct.
+
+            // What if Start < StartHour (e.g. 2 AM session on 4 AM start day)?
+            // Start -> Jan 13 02:00. End -> Jan 13 03:00.
+            // Both > ChartStart (Jan 12 04:00). Correct.
+
+            // Fallback for explicit date-crossing that logic didn't catch (e.g. Start 10:00, End 09:00 next day?)
             if (isBefore(logEnd, logStart)) {
                 logEnd = addHours(logEnd, 24);
             }
