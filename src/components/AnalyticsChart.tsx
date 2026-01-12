@@ -34,6 +34,7 @@ import {
 } from '@/services/analyticsService';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import { useUserPreferences } from '@/contexts/UserPreferencesContext';
 import GoalSettingsDialog from './GoalSettingsDialog';
 
 // Helper to map DB colors to CSS variables for Recharts
@@ -51,6 +52,7 @@ const getColorVar = (dbColorClass: string | undefined): string => {
 
 const AnalyticsChart = () => {
   const { user } = useAuth();
+  const { dayStartHour } = useUserPreferences();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().setDate(new Date().getDate() - 7)), // Last 7 days
     to: new Date(),
@@ -151,7 +153,7 @@ const AnalyticsChart = () => {
     const loadSessions = async () => {
       setLoading(true);
       try {
-        const data = await fetchAnalyticsData(user.id, dateRange.from!, dateRange.to!);
+        const data = await fetchAnalyticsData(user.id, dateRange.from!, dateRange.to!, dayStartHour);
         setSessions(data);
       } catch (error) {
         console.error("Failed to fetch sessions", error);
@@ -160,7 +162,7 @@ const AnalyticsChart = () => {
       }
     };
     loadSessions();
-  }, [user, dateRange]);
+  }, [user, dateRange, dayStartHour]);
 
 
   // DYNAMIC CATEGORY RESOLUTION

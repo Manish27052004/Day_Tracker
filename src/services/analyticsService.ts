@@ -29,7 +29,7 @@ export interface AnalyticsCategoryType {
  * Fetches all sessions within a date range for a specific user.
  * Returns raw data to be processed by the frontend.
  */
-export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo: Date) => {
+export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo: Date, dayStartHour: number = 0) => {
     // Format dates to YYYY-MM-DD for comparison, or ISO if using timestamp columns
     // Assuming 'date' column in sessions is 'YYYY-MM-DD' based on previous context
     const fromStr = dateFrom.toISOString().split('T')[0];
@@ -82,13 +82,32 @@ export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo:
     // Convert Sleep Entries to "Virtual" Sessions dealing with overlaps
     const sleepSessions: AnalyticsSession[] = [];
 
+    // Day Start in Minutes
+    const dayStartMins = (dayStartHour || 0) * 60;
+
     uniqueSleepEntries.forEach((entry) => {
         // Collect all active session intervals for this day
+        // Handle wrapping sessions (split them)
         const daySessions = allData.filter(s => s.date === entry.date);
-        const busyIntervals = daySessions.map(s => ([timeToMins(s.start_time), timeToMins(s.end_time)]));
+        const busyIntervals: [number, number][] = [];
+
+        daySessions.forEach(s => {
+            const start = timeToMins(s.start_time);
+            const end = timeToMins(s.end_time);
+
+            if (end < start) {
+                // Wraps midnight: [Start, 1440] and [0, End]
+                busyIntervals.push([start, 1440]);
+                busyIntervals.push([0, end]);
+            } else {
+                busyIntervals.push([start, end]);
+            }
+        });
 
         // Function to subtract busy intervals from a sleep range
         const subtractBusy = (start: number, end: number): [number, number][] => {
+            if (start >= end) return [];
+
             let ranges: [number, number][] = [[start, end]];
 
             busyIntervals.forEach(([busyStart, busyEnd]) => {
@@ -100,12 +119,6 @@ export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo:
                     }
                     // Overlap logic
                     else {
-                        // Busy cuts start? [BusyStart --- RStart --- BusyEnd --- REnd] -> [BusyEnd, REnd]
-                        // Busy cuts end? [RStart --- BusyStart --- REnd --- BusyEnd] -> [RStart, BusyStart]
-                        // Busy inside? [RStart --- BusyStart --- BusyEnd --- REnd] -> [RStart, BusyStart], [BusyEnd, REnd]
-                        // Busy covers? [BusyStart --- RStart --- REnd --- BusyEnd] -> []
-
-                        // Strict intersections
                         const overlapStart = Math.max(rStart, busyStart);
                         const overlapEnd = Math.min(rEnd, busyEnd);
 
@@ -122,11 +135,12 @@ export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo:
             return ranges;
         };
 
-        // Process Morning Sleep (00:00 -> Wake)
+        // Process Morning Sleep (DayStart -> Wake)
         if (entry.wake_up_time) {
             const wakeMins = timeToMins(entry.wake_up_time);
-            if (wakeMins > 0) {
-                const ranges = subtractBusy(0, wakeMins);
+            // Only count if woke up AFTER day start
+            if (wakeMins > dayStartMins) {
+                const ranges = subtractBusy(dayStartMins, wakeMins);
                 ranges.forEach(([start, end], idx) => {
                     sleepSessions.push({
                         id: `sleep-morning-${entry.id}-${idx}`,
@@ -144,12 +158,59 @@ export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo:
             }
         }
 
-        // Process Night Sleep (Bed -> 24:00)
+        // Process Night Sleep (Bed -> DayStart Next Day)
         if (entry.bed_time) {
             const bedMins = timeToMins(entry.bed_time);
-            // Sanity Check: Ignore if invalid time (>= 24:00)
-            if (bedMins < 1440) {
-                const ranges = subtractBusy(bedMins, 1440);
+
+            // Logic: Sleep from BedTime until DayStart (of next day)
+            // Two cases:
+            // 1. BedTime > DayStart (e.g. 23:00 > 04:00): Sleep 23:00->24:00 AND 00:00->04:00
+            // 2. BedTime < DayStart (e.g. 01:00 < 04:00): Sleep 01:00->04:00 (Post-midnight sleep)
+            //    (Note: If BedTime is e.g. 03:00, sleep is 03:00->04:00)
+
+            // Case 1: BedTime > DayStart (Pre-midnight start)
+            if (bedMins > dayStartMins) {
+                // Part A: Bed -> Midnight
+                if (bedMins < 1440) {
+                    const rangesA = subtractBusy(bedMins, 1440);
+                    rangesA.forEach(([start, end], idx) => {
+                        sleepSessions.push({
+                            id: `sleep-night-a-${entry.id}-${idx}`,
+                            user_id: entry.user_id,
+                            date: entry.date,
+                            custom_name: 'Night Sleep',
+                            category: 'Sleep',
+                            category_type: 'Life',
+                            start_time: minsToTime(start),
+                            end_time: minsToTime(end),
+                            description: 'Generated from Sleep Entry',
+                            created_at: entry.created_at
+                        });
+                    });
+                }
+
+                // Part B: Midnight -> DayStart
+                if (dayStartMins > 0) {
+                    const rangesB = subtractBusy(0, dayStartMins);
+                    rangesB.forEach(([start, end], idx) => {
+                        sleepSessions.push({
+                            id: `sleep-night-b-${entry.id}-${idx}`,
+                            user_id: entry.user_id,
+                            date: entry.date,
+                            custom_name: 'Night Sleep',
+                            category: 'Sleep',
+                            category_type: 'Life',
+                            start_time: minsToTime(start),
+                            end_time: minsToTime(end),
+                            description: 'Generated from Sleep Entry',
+                            created_at: entry.created_at
+                        });
+                    });
+                }
+            }
+            // Case 2: BedTime < DayStart (Post-midnight start)
+            else {
+                const ranges = subtractBusy(bedMins, dayStartMins);
                 ranges.forEach(([start, end], idx) => {
                     sleepSessions.push({
                         id: `sleep-night-${entry.id}-${idx}`,
@@ -159,7 +220,7 @@ export const fetchAnalyticsData = async (userId: string, dateFrom: Date, dateTo:
                         category: 'Sleep',
                         category_type: 'Life',
                         start_time: minsToTime(start),
-                        end_time: minsToTime(end), // 24:00 might become 24:00 string which is technically valid for end time
+                        end_time: minsToTime(end),
                         description: 'Generated from Sleep Entry',
                         created_at: entry.created_at
                     });
