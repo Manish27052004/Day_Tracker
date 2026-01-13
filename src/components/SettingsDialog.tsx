@@ -32,14 +32,7 @@ export interface CategoryType {
     is_active?: boolean;
 }
 
-const COLORS = [
-    { label: 'Red', value: 'bg-danger/10 text-danger border-danger/20' },
-    { label: 'Green', value: 'bg-success/10 text-success border-success/20' },
-    { label: 'Blue', value: 'bg-info/10 text-info border-info/20' },
-    { label: 'Yellow', value: 'bg-warning/10 text-warning border-warning/20' },
-    { label: 'Purple', value: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
-    { label: 'Grey', value: 'bg-muted text-muted-foreground border-border' },
-];
+import { AVAILABLE_COLORS } from '@/lib/colors';
 
 export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }: SettingsDialogProps) => {
     const { user } = useAuth();
@@ -52,14 +45,14 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
 
     // New Item States
     const [newPriorityName, setNewPriorityName] = useState('');
-    const [newPriorityColor, setNewPriorityColor] = useState(COLORS[0].value);
+    const [newPriorityColor, setNewPriorityColor] = useState(AVAILABLE_COLORS[0].value);
 
     const [newCategoryName, setNewCategoryName] = useState('');
     const [newCategoryType, setNewCategoryType] = useState<string>('');
-    const [newCategoryColor, setNewCategoryColor] = useState(COLORS[0].value);
+    const [newCategoryColor, setNewCategoryColor] = useState(AVAILABLE_COLORS[0].value);
 
     const [newTypeName, setNewTypeName] = useState('');
-    const [newTypeColor, setNewTypeColor] = useState(COLORS[0].value);
+    const [newTypeColor, setNewTypeColor] = useState(AVAILABLE_COLORS[0].value);
 
     // Edit State
     const [editingPriorityId, setEditingPriorityId] = useState<number | null>(null);
@@ -352,11 +345,11 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                 <Select value={newPriorityColor} onValueChange={setNewPriorityColor}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        {COLORS.map((c) => (
-                                            <SelectItem key={c.label} value={c.value}>
+                                        {AVAILABLE_COLORS.map((c) => (
+                                            <SelectItem key={c.name} value={c.value}>
                                                 <div className="flex items-center gap-2">
-                                                    <div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />
-                                                    {c.label}
+                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />
+                                                    {c.name}
                                                 </div>
                                             </SelectItem>
                                         ))}
@@ -376,7 +369,7 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                                 <Select value={editPriorityColor} onValueChange={setEditPriorityColor}>
                                                     <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
                                                     <SelectContent>
-                                                        {COLORS.map((c) => (<SelectItem key={c.label} value={c.value}><div className="flex items-center gap-2"><div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />{c.label}</div></SelectItem>))}
+                                                        {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
                                                     </SelectContent>
                                                 </Select>
                                                 <Button size="icon" variant="ghost" onClick={handleUpdatePriority} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
@@ -384,7 +377,18 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                             </div>
                                         ) : (
                                             <>
-                                                <div className="flex items-center gap-3"><span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", p.color)}>{p.name}</span></div>
+                                                <div className="flex items-center gap-3">
+                                                    <span
+                                                        className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", !p.color.startsWith('#') && p.color)}
+                                                        style={p.color.startsWith('#') ? {
+                                                            backgroundColor: `${p.color}20`,
+                                                            color: p.color,
+                                                            borderColor: `${p.color}40`
+                                                        } : undefined}
+                                                    >
+                                                        {p.name}
+                                                    </span>
+                                                </div>
                                                 <div className="flex items-center gap-1">
                                                     <Button variant="ghost" size="icon" onClick={() => { setEditingPriorityId(p.id!); setEditPriorityName(p.name); setEditPriorityColor(p.color); }}><Pencil className="h-4 w-4" /></Button>
                                                     <Button variant="ghost" size="icon" onClick={() => handleDeletePriority(p.id!)}><Trash2 className="h-4 w-4" /></Button>
@@ -412,11 +416,11 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                 <Select value={newTypeColor} onValueChange={setNewTypeColor}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        {COLORS.map((c) => (
-                                            <SelectItem key={c.label} value={c.value}>
+                                        {AVAILABLE_COLORS.map((c) => (
+                                            <SelectItem key={c.name} value={c.value}>
                                                 <div className="flex items-center gap-2">
-                                                    <div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />
-                                                    {c.label}
+                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />
+                                                    {c.name}
                                                 </div>
                                             </SelectItem>
                                         ))}
@@ -435,7 +439,7 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                             <Select value={editTypeColor} onValueChange={setEditTypeColor}>
                                                 <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
                                                 <SelectContent>
-                                                    {COLORS.map((c) => (<SelectItem key={c.label} value={c.value}><div className="flex items-center gap-2"><div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />{c.label}</div></SelectItem>))}
+                                                    {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
                                                 </SelectContent>
                                             </Select>
                                             <Button size="icon" variant="ghost" onClick={handleUpdateType} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
@@ -444,12 +448,19 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                     ) : (
                                         <>
                                             <div className="flex items-center gap-3">
-                                                <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", t.color)}>
+                                                <span
+                                                    className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", !t.color?.startsWith('#') && t.color)}
+                                                    style={t.color?.startsWith('#') ? {
+                                                        backgroundColor: `${t.color}20`,
+                                                        color: t.color,
+                                                        borderColor: `${t.color}40`
+                                                    } : undefined}
+                                                >
                                                     {t.name}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name); setEditTypeColor(t.color || COLORS[5].value); }}><Pencil className="h-4 w-4" /></Button>
+                                                <Button variant="ghost" size="icon" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name); setEditTypeColor(t.color || AVAILABLE_COLORS[5].value); }}><Pencil className="h-4 w-4" /></Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleDeleteType(t.id)}><Trash2 className="h-4 w-4" /></Button>
                                             </div>
                                         </>
@@ -485,7 +496,7 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                 <Select value={newCategoryColor} onValueChange={setNewCategoryColor}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        {COLORS.map((c) => (<SelectItem key={c.label} value={c.value}><div className="flex items-center gap-2"><div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />{c.label}</div></SelectItem>))}
+                                        {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -518,7 +529,7 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                                             <Select value={editCategoryColor} onValueChange={setEditCategoryColor}>
                                                                 <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
                                                                 <SelectContent>
-                                                                    {COLORS.map((c) => (<SelectItem key={c.label} value={c.value}><div className="flex items-center gap-2"><div className={cn("w-3 h-3 rounded-full", c.value.split(' ')[0])} />{c.label}</div></SelectItem>))}
+                                                                    {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
                                                                 </SelectContent>
                                                             </Select>
                                                             <Button size="icon" variant="ghost" onClick={handleUpdateCategory} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
@@ -526,7 +537,14 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                                         </div>
                                                     ) : (
                                                         <>
-                                                            <div className="flex items-center gap-3"><span className={cn("text-sm font-medium", c.color.split(' ')[1])}>{c.name}</span></div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span
+                                                                    className={cn("text-sm font-medium", !c.color.startsWith('#') && c.color.split(' ')[1])}
+                                                                    style={c.color.startsWith('#') ? { color: c.color } : undefined}
+                                                                >
+                                                                    {c.name}
+                                                                </span>
+                                                            </div>
                                                             <div className="flex items-center gap-1">
                                                                 <Button variant="ghost" size="icon" onClick={() => {
                                                                     setEditingCategoryId(c.id!);
@@ -553,7 +571,10 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                                         <div className="space-y-2">
                                             {categories?.filter(c => !categoryTypes.find(t => t.name === c.type)).map((c) => (
                                                 <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg bg-card border-destructive/20">
-                                                    <span className={cn("text-sm font-medium", c.color.split(' ')[1])}>
+                                                    <span
+                                                        className={cn("text-sm font-medium", !c.color.startsWith('#') && c.color.split(' ')[1])}
+                                                        style={c.color.startsWith('#') ? { color: c.color } : undefined}
+                                                    >
                                                         {c.name} <span className="text-[10px] text-muted-foreground">({c.type})</span>
                                                     </span>
                                                     <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(c.id!)}><Trash2 className="h-4 w-4" /></Button>
