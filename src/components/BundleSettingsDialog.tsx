@@ -34,18 +34,7 @@ interface BundleSettingsDialogProps {
     onBundlesUpdated: () => void;
 }
 
-const COLORS = [
-    '#ef4444', // Red
-    '#f97316', // Orange
-    '#eab308', // Yellow
-    '#22c55e', // Green
-    '#06b6d4', // Cyan
-    '#3b82f6', // Blue
-    '#6366f1', // Indigo
-    '#a855f7', // Purple
-    '#ec4899', // Pink
-    '#64748b', // Slate
-];
+import { AVAILABLE_COLORS } from '@/lib/colors';
 
 const BundleSettingsDialog = ({ onBundlesUpdated }: BundleSettingsDialogProps) => {
     const { user } = useAuth();
@@ -55,7 +44,7 @@ const BundleSettingsDialog = ({ onBundlesUpdated }: BundleSettingsDialogProps) =
 
     // Form State
     const [name, setName] = useState('');
-    const [color, setColor] = useState(COLORS[6]); // Default Indigo
+    const [color, setColor] = useState(AVAILABLE_COLORS[6].value); // Default Indigo
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
 
     useEffect(() => {
@@ -173,16 +162,17 @@ const BundleSettingsDialog = ({ onBundlesUpdated }: BundleSettingsDialogProps) =
                         <div>
                             <Label className="text-xs">Color</Label>
                             <div className="flex flex-wrap gap-2 mt-1">
-                                {COLORS.map(c => (
+                                {AVAILABLE_COLORS.map(c => (
                                     <button
-                                        key={c}
+                                        key={c.name}
                                         type="button"
-                                        onClick={() => setColor(c)}
+                                        onClick={() => setColor(c.value)}
                                         className={cn(
                                             "w-5 h-5 rounded-full transition-transform",
-                                            color === c ? "ring-2 ring-offset-2 ring-primary scale-110" : ""
+                                            color === c.value ? "ring-2 ring-offset-2 ring-primary scale-110" : ""
                                         )}
-                                        style={{ backgroundColor: c }}
+                                        style={{ backgroundColor: c.value }}
+                                        title={c.name}
                                     />
                                 ))}
                             </div>

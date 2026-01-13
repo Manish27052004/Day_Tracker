@@ -36,18 +36,7 @@ interface GoalSettingsDialogProps {
     onGoalsUpdated: (goals: AnalyticsGoal[]) => void;
 }
 
-const COLORS = [
-    '#ef4444', // Red 500
-    '#f97316', // Orange 500
-    '#eab308', // Yellow 500
-    '#22c55e', // Green 500
-    '#06b6d4', // Cyan 500
-    '#3b82f6', // Blue 500
-    '#6366f1', // Indigo 500
-    '#a855f7', // Purple 500
-    '#ec4899', // Pink 500
-    '#64748b', // Slate 500
-];
+import { AVAILABLE_COLORS } from '@/lib/colors';
 
 const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdated }: GoalSettingsDialogProps) => {
     const { user } = useAuth();
@@ -61,7 +50,7 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
     const [hours, setHours] = useState('');
     const [minutes, setMinutes] = useState('');
     const [categoryKey, setCategoryKey] = useState('');
-    const [color, setColor] = useState(COLORS[0]);
+    const [color, setColor] = useState(AVAILABLE_COLORS[0].value);
 
     // Combined options for dropdown
     const categoryOptions: { label: string; value: string; disabled?: boolean }[] = [
@@ -97,7 +86,7 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
         setHours('');
         setMinutes('');
         setCategoryKey('');
-        setColor(COLORS[0]);
+        setColor(AVAILABLE_COLORS[0].value);
     };
 
     const startEditing = (goal: AnalyticsGoal) => {
@@ -262,16 +251,17 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
                         <div>
                             <Label className="text-xs">Color</Label>
                             <div className="flex flex-wrap gap-2 mt-1">
-                                {COLORS.map(c => (
+                                {AVAILABLE_COLORS.map(c => (
                                     <button
-                                        key={c}
+                                        key={c.name}
                                         type="button"
-                                        onClick={() => setColor(c)}
+                                        onClick={() => setColor(c.value)}
                                         className={cn(
                                             "w-6 h-6 rounded-full transition-transform hover:scale-110",
-                                            color === c ? "ring-2 ring-offset-2 ring-primary scale-110" : ""
+                                            color === c.value ? "ring-2 ring-offset-2 ring-primary scale-110" : ""
                                         )}
-                                        style={{ backgroundColor: c }}
+                                        style={{ backgroundColor: c.value }}
+                                        title={c.name}
                                     />
                                 ))}
                             </div>

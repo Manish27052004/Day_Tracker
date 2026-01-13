@@ -16,16 +16,7 @@ interface EditSubjectDialogProps {
     onSave: () => void;
 }
 
-const COLORS = [
-    { name: 'Red', value: '#ef4444' },
-    { name: 'Green', value: '#22c55e' },
-    { name: 'Blue', value: '#3b82f6' },
-    { name: 'Yellow', value: '#eab308' },
-    { name: 'Purple', value: '#a855f7' },
-    { name: 'Orange', value: '#f97316' },
-    { name: 'Pink', value: '#ec4899' },
-    { name: 'Cyan', value: '#06b6d4' },
-];
+import { AVAILABLE_COLORS } from '@/lib/colors';
 
 export const EditSubjectDialog: React.FC<EditSubjectDialogProps> = ({ open, onOpenChange, subjectToEdit, onSave }) => {
     const [name, setName] = useState('');
@@ -38,13 +29,13 @@ export const EditSubjectDialog: React.FC<EditSubjectDialogProps> = ({ open, onOp
             setName(subjectToEdit.name);
             setCriteria(subjectToEdit.criteria);
             setProfessor(subjectToEdit.professor || '');
-            const matchedColor = COLORS.find(c => c.value === subjectToEdit.color) || { name: 'Custom', value: subjectToEdit.color };
+            const matchedColor = AVAILABLE_COLORS.find(c => c.value === subjectToEdit.color) || { name: 'Custom', value: subjectToEdit.color };
             setColor(matchedColor);
         } else {
             setName('');
             setCriteria(75);
             setProfessor('');
-            setColor(COLORS[2]); // Default Blue
+            setColor(AVAILABLE_COLORS[10]); // Default Blue (index 10 in new list, check index!)
         }
     }, [subjectToEdit, open]);
 
@@ -123,7 +114,7 @@ export const EditSubjectDialog: React.FC<EditSubjectDialogProps> = ({ open, onOp
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label className="text-right">Color</Label>
                         <div className="col-span-3 flex gap-2 flex-wrap">
-                            {COLORS.map((c) => (
+                            {AVAILABLE_COLORS.map((c) => (
                                 <button
                                     key={c.name}
                                     type="button"
