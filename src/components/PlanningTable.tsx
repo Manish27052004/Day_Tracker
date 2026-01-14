@@ -38,6 +38,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface PlanningTableProps {
   selectedDate: Date;
@@ -49,6 +50,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
   const [repeatDialogOpen, setRepeatDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any | undefined>();
+  const isMobile = useIsMobile();
 
   // === CLOUD-ONLY MODE ===
   const { user } = useAuth();
@@ -470,179 +472,316 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.3 }}
     >
-      <div className="overflow-x-auto custom-scrollbar">
-        <table className="w-full border-collapse min-w-max">
-          <thead>
-            <tr className="bg-muted/30 border-b border-border">
-              {/* Strike - Sticky Left 0 */}
-              <th className="w-[80px] sticky left-0 z-20 bg-background border-r border-border px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">
-                Strike
-              </th>
-              {/* Task Name - Sticky Left 80px */}
-              <th className="min-w-[250px] sticky left-[79px] z-20 bg-background border-r border-border pl-2 pr-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">
-                Task Name
-              </th>
-              <th className="min-w-[150px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Progress</th>
-              <th className="min-w-[150px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Priority</th>
-              <th className="min-w-[100px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Target</th>
-              <th className="min-w-[350px] px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Description</th>
-              <th className="min-w-[300px] px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Completed</th>
-              <th className="w-[80px] px-4 py-3"></th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-border/50">
-            <AnimatePresence mode="popLayout">
-              {tasks?.map((task, index) => {
-                // 🔍 DEBUG: Log task data
-                /* console.log('Task Data:', { ... }); */
-
-                return (
-                  <motion.tr
-                    key={task.id}
-                    layout
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.2, delay: index * 0.05 }}
-                    className="hover:bg-muted/20 transition-colors group"
-                  >
-                    {/* Strike - Sticky Left 0 */}
-                    <td className="w-[80px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3 cursor-context-menu">
-                      <ContextMenu>
-                        <ContextMenuTrigger>
-                          <div className="flex flex-col items-center gap-1 h-full w-full justify-center min-h-[24px]">
-                            {/* Display strikes directly from database */}
-                            {task.achieverStrike === 0 && task.fighterStrike === 0 ? (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            ) : (
-                              <div className="flex flex-col gap-1">
-                                {/* Achiever Strike */}
-                                {task.achieverStrike > 0 && (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-base">🔥</span>
-                                    <span className="text-sm font-semibold text-orange-600">
-                                      {task.achieverStrike}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* Fighter Strike */}
-                                {task.fighterStrike > 0 && (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-base">⚔️</span>
-                                    <span className="text-sm font-bold bg-gradient-to-r from-yellow-500 to-orange-600 bg-clip-text text-transparent">
-                                      {task.fighterStrike}
-                                    </span>
-                                  </div>
-                                )}
+      {/* Mobile Card View */}
+      {isMobile ? (
+        <div className="p-4 space-y-4">
+          <AnimatePresence mode="popLayout" initial={false}>
+            {tasks?.map((task) => (
+              <motion.div
+                key={task.id}
+                layout
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="bg-card rounded-xl border border-border/60 shadow-sm p-3 relative group"
+              >
+                {/* Header: Strike & Priority & Delete */}
+                <div className="flex justify-between items-start mb-3">
+                  {/* Strike (Left) */}
+                  <ContextMenu>
+                    <ContextMenuTrigger>
+                      <div className="flex flex-col items-center justify-center min-w-[32px]">
+                        {task.achieverStrike === 0 && task.fighterStrike === 0 ? (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            {task.achieverStrike > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">🔥</span>
+                                <span className="text-xs font-semibold text-orange-600">
+                                  {task.achieverStrike}
+                                </span>
+                              </div>
+                            )}
+                            {task.fighterStrike > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">⚔️</span>
+                                <span className="text-xs font-bold bg-gradient-to-r from-yellow-500 to-orange-600 bg-clip-text text-transparent">
+                                  {task.fighterStrike}
+                                </span>
                               </div>
                             )}
                           </div>
-                        </ContextMenuTrigger>
-                        <ContextMenuContent>
-                          <ContextMenuItem onClick={() => handleRecalculateStreak(task)}>
-                            Recalculate History
-                          </ContextMenuItem>
-                        </ContextMenuContent>
-                      </ContextMenu>
-                    </td>
+                        )}
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem onClick={() => handleRecalculateStreak(task)}>
+                        Recalculate History
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
 
-                    {/* Task Name - Sticky Left 80px */}
-                    <td className="min-w-[250px] sticky left-[79px] z-20 bg-background group-hover:bg-background border-r border-border pl-2 pr-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <DebouncedInput
-                          value={task.name}
-                          onChange={(value) => updateTask(task.id!, { name: value })}
-                          placeholder="Task name..."
-                          className="ghost-input h-8 text-sm font-medium flex-1 min-w-0"
+                  {/* Priority (Middle) */}
+                  <div className="flex-1 flex justify-center mx-2">
+                    <Select
+                      value={task.priority || ''}
+                      onValueChange={(value) => updateTask(task.id!, { priority: value })}
+                    >
+                      <SelectTrigger className="h-6 w-auto min-w-[80px] border-none bg-transparent hover:bg-muted/50 transition-colors justify-center p-0 shadow-none">
+                        <SelectValue>
+                          <PriorityTag
+                            priority={task.priority}
+                            color={priorities.find(p => p.name === task.priority)?.color}
+                          />
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent align="center">
+                        {priorities?.map(p => (
+                          <SelectItem key={p.id} value={p.name}>
+                            <PriorityTag priority={p.name} color={p.color} />
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Delete (Right) */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deleteTask(task.id!)}
+                    className="h-6 w-6 text-muted-foreground hover:text-danger -mr-1"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+
+                {/* Task Name */}
+                <div className="mb-3">
+                  <DebouncedInput
+                    value={task.name}
+                    onChange={(value) => updateTask(task.id!, { name: value })}
+                    placeholder="Task name..."
+                    className="ghost-input h-7 text-sm font-semibold flex-1 min-w-0"
+                  />
+                </div>
+
+                {/* Progress Bar */}
+                <div className="mb-3 px-1">
+                  <TaskProgressBar
+                    progress={task.id ? (taskProgress[task.id] || 0) : 0}
+                    targetTime={task.targetTime}
+                  />
+                </div>
+
+                {/* Description & Target */}
+                <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+                  <DebouncedTextarea
+                    value={task.description}
+                    onChange={(value) => updateTask(task.id!, { description: value })}
+                    placeholder="Description..."
+                    className="ghost-input min-h-[32px] text-xs resize-none"
+                    rows={1}
+                  />
+
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Target</span>
+                    <DurationPicker
+                      value={task.targetTime}
+                      onChange={(minutes) => updateTask(task.id!, { targetTime: minutes })}
+                    />
+                  </div>
+                </div>
+
+                {/* Completed Desc */}
+                {task.completedDescription && (
+                  <div className="mt-2 text-xs text-muted-foreground bg-muted/20 px-2 py-1 rounded">
+                    ✓ {task.completedDescription}
+                  </div>
+                )}
+
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      ) : (
+        /* Desktop Table View */
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full border-collapse min-w-max">
+            <thead>
+              <tr className="bg-muted/30 border-b border-border">
+                {/* Strike - Sticky Left 0 */}
+                <th className="w-[80px] sticky left-0 z-20 bg-background border-r border-border px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">
+                  Strike
+                </th>
+                {/* Task Name - Sticky Left 80px */}
+                <th className="min-w-[250px] sticky left-[79px] z-20 bg-background border-r border-border pl-2 pr-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">
+                  Task Name
+                </th>
+                <th className="min-w-[150px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Progress</th>
+                <th className="min-w-[150px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Priority</th>
+                <th className="min-w-[100px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Target</th>
+                <th className="min-w-[350px] px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Description</th>
+                <th className="min-w-[300px] px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Completed</th>
+                <th className="w-[80px] px-4 py-3"></th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-border/50">
+              <AnimatePresence mode="popLayout">
+                {tasks?.map((task, index) => {
+                  // 🔍 DEBUG: Log task data
+                  /* console.log('Task Data:', { ... }); */
+
+                  return (
+                    <motion.tr
+                      key={task.id}
+                      layout
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2, delay: index * 0.05 }}
+                      className="hover:bg-muted/20 transition-colors group"
+                    >
+                      {/* Strike - Sticky Left 0 */}
+                      <td className="w-[80px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3 cursor-context-menu">
+                        <ContextMenu>
+                          <ContextMenuTrigger>
+                            <div className="flex flex-col items-center gap-1 h-full w-full justify-center min-h-[24px]">
+                              {/* Display strikes directly from database */}
+                              {task.achieverStrike === 0 && task.fighterStrike === 0 ? (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              ) : (
+                                <div className="flex flex-col gap-1">
+                                  {/* Achiever Strike */}
+                                  {task.achieverStrike > 0 && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-base">🔥</span>
+                                      <span className="text-sm font-semibold text-orange-600">
+                                        {task.achieverStrike}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Fighter Strike */}
+                                  {task.fighterStrike > 0 && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-base">⚔️</span>
+                                      <span className="text-sm font-bold bg-gradient-to-r from-yellow-500 to-orange-600 bg-clip-text text-transparent">
+                                        {task.fighterStrike}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem onClick={() => handleRecalculateStreak(task)}>
+                              Recalculate History
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
+                      </td>
+
+                      {/* Task Name - Sticky Left 80px */}
+                      <td className="min-w-[250px] sticky left-[79px] z-20 bg-background group-hover:bg-background border-r border-border pl-2 pr-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <DebouncedInput
+                            value={task.name}
+                            onChange={(value) => updateTask(task.id!, { name: value })}
+                            placeholder="Task name..."
+                            className="ghost-input h-8 text-sm font-medium flex-1 min-w-0"
+                          />
+                        </div>
+                      </td>
+
+                      {/* Progress */}
+                      <td className="min-w-[150px] px-4 py-3">
+                        <TaskProgressBar
+                          progress={task.id ? (taskProgress[task.id] || 0) : 0}
+                          targetTime={task.targetTime}
                         />
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Progress */}
-                    <td className="min-w-[150px] px-4 py-3">
-                      <TaskProgressBar
-                        progress={task.id ? (taskProgress[task.id] || 0) : 0}
-                        targetTime={task.targetTime}
-                      />
-                    </td>
+                      {/* Priority */}
+                      <td className="min-w-[150px] px-4 py-3">
+                        <div className="flex justify-center">
+                          <Select
+                            value={task.priority || ''}
+                            onValueChange={(value) => updateTask(task.id!, { priority: value })}
+                          >
+                            <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-muted/50 transition-colors justify-center">
+                              <SelectValue>
+                                <PriorityTag
+                                  priority={task.priority}
+                                  color={priorities.find(p => p.name === task.priority)?.color}
+                                />
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent align="center">
+                              {priorities?.map(p => (
+                                <SelectItem key={p.id} value={p.name}>
+                                  <PriorityTag priority={p.name} color={p.color} />
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </td>
 
-                    {/* Priority */}
-                    <td className="min-w-[150px] px-4 py-3">
-                      <div className="flex justify-center">
-                        <Select
-                          value={task.priority || ''}
-                          onValueChange={(value) => updateTask(task.id!, { priority: value })}
-                        >
-                          <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-muted/50 transition-colors justify-center">
-                            <SelectValue>
-                              <PriorityTag
-                                priority={task.priority}
-                                color={priorities.find(p => p.name === task.priority)?.color}
-                              />
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent align="center">
-                            {priorities?.map(p => (
-                              <SelectItem key={p.id} value={p.name}>
-                                <PriorityTag priority={p.name} color={p.color} />
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </td>
+                      {/* Target Time */}
+                      <td className="min-w-[100px] px-4 py-3">
+                        <div className="flex justify-center">
+                          <DurationPicker
+                            value={task.targetTime}
+                            onChange={(minutes) => updateTask(task.id!, { targetTime: minutes })}
+                          />
+                        </div>
+                      </td>
 
-                    {/* Target Time */}
-                    <td className="min-w-[100px] px-4 py-3">
-                      <div className="flex justify-center">
-                        <DurationPicker
-                          value={task.targetTime}
-                          onChange={(minutes) => updateTask(task.id!, { targetTime: minutes })}
+                      {/* Description */}
+                      <td className="min-w-[350px] px-4 py-3">
+                        <DebouncedTextarea
+                          value={task.description}
+                          onChange={(value) => updateTask(task.id!, { description: value })}
+                          placeholder="Description..."
+                          className="ghost-input min-h-[32px] text-sm resize-none"
+                          rows={1}
                         />
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Description */}
-                    <td className="min-w-[350px] px-4 py-3">
-                      <DebouncedTextarea
-                        value={task.description}
-                        onChange={(value) => updateTask(task.id!, { description: value })}
-                        placeholder="Description..."
-                        className="ghost-input min-h-[32px] text-sm resize-none"
-                        rows={1}
-                      />
-                    </td>
+                      {/* Completed Description */}
+                      <td className="min-w-[300px] px-4 py-3">
+                        <p className="text-sm text-muted-foreground truncate">
+                          {task.completedDescription || '—'}
+                        </p>
+                      </td>
 
-                    {/* Completed Description */}
-                    <td className="min-w-[300px] px-4 py-3">
-                      <p className="text-sm text-muted-foreground truncate">
-                        {task.completedDescription || '—'}
-                      </p>
-                    </td>
+                      {/* Actions */}
+                      <td className="w-[80px] px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
 
-                    {/* Actions */}
-                    <td className="w-[80px] px-4 py-3">
-                      <div className="flex items-center justify-center gap-1">
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteTask(task.id!)}
-                          className="h-7 w-7 text-muted-foreground hover:text-danger hover:bg-danger/10 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </AnimatePresence>
-          </tbody>
-        </table>
-      </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteTask(task.id!)}
+                            className="h-7 w-7 text-muted-foreground hover:text-danger hover:bg-danger/10 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  );
+                })}
+              </AnimatePresence>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Add Task Button with Template Dropdown */}
       <motion.div
