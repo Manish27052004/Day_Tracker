@@ -15,7 +15,7 @@ const DateController = ({ selectedDate, onDateChange }: DateControllerProps) => 
   const handleNextDay = () => onDateChange(addDays(selectedDate, 1));
 
   return (
-    <motion.div 
+    <motion.div
       className="flex items-center justify-center gap-3"
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -37,7 +37,7 @@ const DateController = ({ selectedDate, onDateChange }: DateControllerProps) => 
             className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent transition-all font-medium"
           >
             <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="text-base">
+            <span className="text-base whitespace-nowrap">
               {format(selectedDate, 'EEE, dd MMM')}
             </span>
           </Button>

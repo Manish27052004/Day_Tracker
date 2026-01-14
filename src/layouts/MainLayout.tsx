@@ -1,17 +1,28 @@
 import { Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 // import { motion, AnimatePresence } from 'framer-motion'; // Removed for stability
-import { CalendarClock, Users, LogOut, LayoutDashboard, BarChart3, Grid3X3 } from 'lucide-react';
+import { CalendarClock, Users, LogOut, LayoutDashboard, BarChart3, Grid3X3, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import { ModeToggle } from "@/components/mode-toggle";
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+} from "@/components/ui/sheet";
+import { cn } from '@/lib/utils';
 
 const MainLayout = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { signOut } = useAuth();
     const [mode, setMode] = useState<'tracker' | 'attendance' | 'all'>('all');
+    const isMobile = useIsMobile();
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     // Determine mode from path or previous selection
     useEffect(() => {
@@ -34,6 +45,15 @@ const MainLayout = () => {
 
     const isAllMode = location.pathname.startsWith('/all');
 
+    const links = (location.pathname.includes('/tracker') ? [
+        { to: '/all/tracker', label: 'Home', icon: LayoutDashboard },
+        { to: '/all/tracker/analytics', label: 'Analytics', icon: BarChart3 },
+        { to: '/all/tracker/matrix', label: 'Habit Matrix', icon: Grid3X3 }
+    ] : [
+        { to: '/all/attendance', label: 'Home', icon: LayoutDashboard },
+        // { to: '/all/attendance/analytics', label: 'Analytics', icon: BarChart3 } // Placeholder
+    ]);
+
     return (
         <div className="min-h-screen bg-background flex flex-col">
             {/* Top Navigation Bar - Only visible in "All" mode */}
@@ -43,37 +63,116 @@ const MainLayout = () => {
                         {/* Top Row: Workspace + App Switcher + Actions */}
                         <div className="flex items-center justify-between py-3 border-b border-border/40">
                             <div className="flex items-center gap-4">
-                                <Link to="/select-mode">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-2 hidden sm:flex border-primary/20 hover:border-primary/50 hover:bg-primary/5"
-                                    >
-                                        <LayoutDashboard className="h-4 w-4" />
-                                        <span>Change Workspace</span>
-                                    </Button>
-                                </Link>
+                                {/* Mobile Menu Trigger */}
+                                {isMobile && (
+                                    <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+                                        <SheetTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="-ml-2">
+                                                <Menu className="h-5 w-5" />
+                                            </Button>
+                                        </SheetTrigger>
+                                        <SheetContent side="left" className="w-[300px] sm:w-[400px]">
+                                            <SheetHeader>
+                                                <SheetTitle>Menu</SheetTitle>
+                                            </SheetHeader>
+                                            <div className="flex flex-col gap-4 py-4">
+                                                <div className="flex flex-col gap-2">
+                                                    <p className="text-sm font-medium text-muted-foreground px-2">Navigation</p>
+                                                    {links.map((link) => {
+                                                        const Icon = link.icon;
+                                                        const isActive = location.pathname === link.to;
+                                                        return (
+                                                            <Link
+                                                                key={link.to}
+                                                                to={link.to}
+                                                                onClick={() => setMobileOpen(false)}
+                                                                className={cn(
+                                                                    "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200",
+                                                                    isActive
+                                                                        ? "bg-secondary text-secondary-foreground"
+                                                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                                )}
+                                                            >
+                                                                <Icon className="h-4 w-4" />
+                                                                <span>{link.label}</span>
+                                                            </Link>
+                                                        )
+                                                    })}
+                                                </div>
 
-                                <nav className="flex items-center gap-1 border-l pl-4 ml-2 border-border/40">
-                                    <Link to="/all/tracker">
-                                        <Button
-                                            variant={location.pathname.includes('/tracker') ? "secondary" : "ghost"}
-                                            size="sm"
-                                            className="gap-2"
-                                        >
-                                            <CalendarClock className="h-4 w-4" /> Daily Tracker
-                                        </Button>
-                                    </Link>
-                                    <Link to="/all/attendance">
-                                        <Button
-                                            variant={location.pathname.includes('/attendance') ? "secondary" : "ghost"}
-                                            size="sm"
-                                            className="gap-2"
-                                        >
-                                            <Users className="h-4 w-4" /> Attendance
-                                        </Button>
-                                    </Link>
-                                </nav>
+                                                <div className="border-t border-border/50 my-2" />
+
+                                                {/* App Mobile Switcher */}
+                                                <div className="flex flex-col gap-2">
+                                                    <p className="text-sm font-medium text-muted-foreground px-2">Switch App</p>
+                                                    <Link to="/all/tracker" onClick={() => setMobileOpen(false)}>
+                                                        <Button
+                                                            variant={location.pathname.includes('/tracker') ? "secondary" : "ghost"}
+                                                            size="sm"
+                                                            className="w-full justify-start gap-2 px-2"
+                                                        >
+                                                            <CalendarClock className="h-4 w-4" /> Daily Tracker
+                                                        </Button>
+                                                    </Link>
+                                                    <Link to="/all/attendance" onClick={() => setMobileOpen(false)}>
+                                                        <Button
+                                                            variant={location.pathname.includes('/attendance') ? "secondary" : "ghost"}
+                                                            size="sm"
+                                                            className="w-full justify-start gap-2 px-2"
+                                                        >
+                                                            <Users className="h-4 w-4" /> Attendance
+                                                        </Button>
+                                                    </Link>
+                                                </div>
+
+                                                <div className="border-t border-border/50 my-2" />
+
+                                                <Link to="/select-mode" onClick={() => setMobileOpen(false)}>
+                                                    <Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-2">
+                                                        <LayoutDashboard className="h-4 w-4" />
+                                                        Change Workspace
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        </SheetContent>
+                                    </Sheet>
+                                )}
+
+                                {!isMobile && (
+                                    <>
+                                        <Link to="/select-mode">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="gap-2 hidden sm:flex border-primary/20 hover:border-primary/50 hover:bg-primary/5"
+                                            >
+                                                <LayoutDashboard className="h-4 w-4" />
+                                                <span>Change Workspace</span>
+                                            </Button>
+                                        </Link>
+
+                                        <nav className="flex items-center gap-1 border-l pl-4 ml-2 border-border/40">
+                                            <Link to="/all/tracker">
+                                                <Button
+                                                    variant={location.pathname.includes('/tracker') ? "secondary" : "ghost"}
+                                                    size="sm"
+                                                    className="gap-2"
+                                                >
+                                                    <CalendarClock className="h-4 w-4" /> Daily Tracker
+                                                </Button>
+                                            </Link>
+                                            <Link to="/all/attendance">
+                                                <Button
+                                                    variant={location.pathname.includes('/attendance') ? "secondary" : "ghost"}
+                                                    size="sm"
+                                                    className="gap-2"
+                                                >
+                                                    <Users className="h-4 w-4" /> Attendance
+                                                </Button>
+                                            </Link>
+                                        </nav>
+                                    </>
+                                )}
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -85,44 +184,29 @@ const MainLayout = () => {
                         </div>
 
                         {/* Bottom Row: Sub-Navigation (Home | Analytics) */}
-                        <div className="flex items-center py-2 gap-1">
-                            <nav className="flex items-center gap-1">
-                                {(location.pathname.includes('/tracker') ? [
-                                    { to: '/all/tracker', label: 'Home', icon: LayoutDashboard },
-                                    { to: '/all/tracker/analytics', label: 'Analytics', icon: BarChart3 },
-                                    { to: '/all/tracker/matrix', label: 'Habit Matrix', icon: Grid3X3 }
-                                ] : [
-                                    { to: '/all/attendance', label: 'Home', icon: LayoutDashboard },
-                                    // { to: '/all/attendance/analytics', label: 'Analytics', icon: BarChart3 } // Placeholder
-                                ]).map((link) => {
-                                    const isActive = location.pathname === link.to;
-                                    const Icon = link.icon;
-                                    return (
-                                        <Link
-                                            key={link.to}
-                                            to={link.to}
-                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${isActive
-                                                ? "bg-secondary text-secondary-foreground"
-                                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                                                }`}
-                                        >
-                                            <Icon className="h-4 w-4" />
-                                            <span>{link.label}</span>
-                                        </Link>
-                                    );
-                                })}
-                            </nav>
-                        </div>
-
-                        {/* Mobile Switch Mode */}
-                        <div className="sm:hidden flex justify-center py-2 border-t border-border/40">
-                            <Link to="/select-mode" className="w-full">
-                                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground w-full justify-center">
-                                    <LayoutDashboard className="h-4 w-4" />
-                                    <span>Change Workspace</span>
-                                </Button>
-                            </Link>
-                        </div>
+                        {!isMobile && (
+                            <div className="flex items-center py-2 gap-1">
+                                <nav className="flex items-center gap-1">
+                                    {links.map((link) => {
+                                        const isActive = location.pathname === link.to;
+                                        const Icon = link.icon;
+                                        return (
+                                            <Link
+                                                key={link.to}
+                                                to={link.to}
+                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${isActive
+                                                    ? "bg-secondary text-secondary-foreground"
+                                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                    }`}
+                                            >
+                                                <Icon className="h-4 w-4" />
+                                                <span>{link.label}</span>
+                                            </Link>
+                                        );
+                                    })}
+                                </nav>
+                            </div>
+                        )}
                     </div>
                 </header>
             ) : (
