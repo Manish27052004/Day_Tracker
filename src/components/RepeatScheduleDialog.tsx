@@ -7,6 +7,17 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    Drawer,
+    DrawerClose,
+    DrawerContent,
+    DrawerDescription,
+    DrawerFooter,
+    DrawerHeader,
+    DrawerTitle,
+    DrawerTrigger,
+} from "@/components/ui/drawer";
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Label } from '@/components/ui/label';
 import {
     Select,
@@ -129,9 +140,129 @@ const RepeatScheduleDialog = ({ open, onOpenChange, task, onSave }: RepeatSchedu
         }
     };
 
+    const isMobile = useIsMobile();
+
+    // Shared Form Content
+    const renderFormInfo = () => (
+        <div className="space-y-4">
+            {/* Task Name */}
+            <div className="space-y-2">
+                <Label htmlFor="name">Task Name</Label>
+                <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g., Morning Exercise"
+                    className="bg-background"
+                />
+            </div>
+
+            {/* Priority */}
+            <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select value={priority || ''} onValueChange={(v) => setPriority(v)}>
+                    <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {priorities?.map(p => (
+                            <SelectItem key={p.id} value={p.name}>
+                                <PriorityTag priority={p.name} color={p.color} />
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Target Time */}
+            <div className="space-y-2">
+                <Label>Target Duration</Label>
+                <DurationPicker value={targetTime} onChange={setTargetTime} />
+            </div>
+
+            {/* Minimum Completion Target (Strike System) */}
+            <div className="space-y-2 bg-muted/30 p-3 rounded-lg border border-border/50">
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="minTarget" className="flex items-center gap-2">
+                        <span>🎯 Strike Goal</span>
+                    </Label>
+                    <span className="text-sm font-semibold text-primary">
+                        {minCompletionTarget}%
+                    </span>
+                </div>
+                <div className="space-y-2 mt-2">
+                    <input
+                        id="minTarget"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="5"
+                        value={minCompletionTarget}
+                        onChange={(e) => setMinCompletionTarget(Number(e.target.value))}
+                        className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                    />
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                        <span>Easy (0%)</span>
+                        <span>Balanced (50%)</span>
+                        <span>Hard (100%)</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="What needs to be done?"
+                    rows={isMobile ? 3 : 2}
+                    className="bg-background resize-none"
+                />
+            </div>
+        </div>
+    );
+
+    const renderFooter = () => (
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 sm:gap-0 mt-4">
+            {isMobile ? (
+                <DrawerClose asChild>
+                    <Button variant="outline" className="w-full">Cancel</Button>
+                </DrawerClose>
+            ) : (
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                </Button>
+            )}
+            <Button onClick={handleSave} disabled={!name} className="w-full sm:w-auto">
+                {task && 'isActive' in task ? 'Save Changes' : 'Create Template'}
+            </Button>
+        </div>
+    );
+
+    if (isMobile) {
+        return (
+            <Drawer open={open} onOpenChange={onOpenChange}>
+                <DrawerContent>
+                    <DrawerHeader className="text-left">
+                        <DrawerTitle>{task && 'isActive' in task ? 'Edit Template' : 'New Template'}</DrawerTitle>
+                        <DrawerDescription>
+                            Create a reusable task template.
+                        </DrawerDescription>
+                    </DrawerHeader>
+                    <div className="px-4 pb-8 overflow-y-auto max-h-[70vh]">
+                        {renderFormInfo()}
+                        {renderFooter()}
+                    </div>
+                </DrawerContent>
+            </Drawer>
+        );
+    }
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden p-0 flex flex-col bg-card border-border">
+            <DialogContent className="max-w-xl max-h-[85vh] overflow-hidden p-0 flex flex-col bg-card border-border">
                 <div className="px-6 pt-6 pb-2">
                     <DialogTitle>{task && 'isActive' in task ? 'Edit Template' : 'Create Template'}</DialogTitle>
                     <DialogDescription>
@@ -139,100 +270,12 @@ const RepeatScheduleDialog = ({ open, onOpenChange, task, onSave }: RepeatSchedu
                     </DialogDescription>
                 </div>
 
-                <div className="overflow-y-auto px-6 py-4 flex-1 no-scrollbar">
-                    <div className="space-y-4">
-                        {/* Task Name */}
-                        <div className="space-y-2">
-                            <Label htmlFor="name">Task Name</Label>
-                            <Input
-                                id="name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="e.g., Morning Exercise"
-                            />
-                        </div>
-
-                        {/* Priority */}
-                        <div className="space-y-2">
-                            <Label>Priority</Label>
-                            <Select value={priority || ''} onValueChange={(v) => setPriority(v)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select priority" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {priorities?.map(p => (
-                                        <SelectItem key={p.id} value={p.name}>
-                                            <PriorityTag priority={p.name} color={p.color} />
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Target Time */}
-                        <div className="space-y-2">
-                            <Label>Target Duration</Label>
-                            <DurationPicker value={targetTime} onChange={setTargetTime} />
-                        </div>
-
-                        {/* Minimum Completion Target (Strike System) */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="minTarget" className="flex items-center gap-2">
-                                    <span>🎯 Minimum Target</span>
-                                    <span className="text-xs text-muted-foreground font-normal">
-                                        (for strike tracking)
-                                    </span>
-                                </Label>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-semibold text-primary">
-                                        {minCompletionTarget}%
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <input
-                                    id="minTarget"
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    step="5"
-                                    value={minCompletionTarget}
-                                    onChange={(e) => setMinCompletionTarget(Number(e.target.value))}
-                                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                                />
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                    <span>0%</span>
-                                    <span>50%</span>
-                                    <span>100%</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Tasks completing above this % will count toward your Achiever strike 🔥
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Description */}
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Description</Label>
-                            <Textarea
-                                id="description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="What needs to be done?"
-                                rows={2}
-                            />
-                        </div>
-                    </div>
+                <div className="overflow-y-auto px-6 py-4 flex-1 custom-scrollbar">
+                    {renderFormInfo()}
                 </div>
 
-                <div className="border-t px-6 py-4 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={!name}>
-                        {task && 'isActive' in task ? 'Save Changes' : 'Create Template'}
-                    </Button>
+                <div className="border-t px-6 py-4">
+                    {renderFooter()}
                 </div>
             </DialogContent>
         </Dialog>
