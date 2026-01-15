@@ -9,6 +9,17 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    Drawer,
+    DrawerClose,
+    DrawerContent,
+    DrawerDescription,
+    DrawerFooter,
+    DrawerHeader,
+    DrawerTitle,
+    DrawerTrigger,
+} from "@/components/ui/drawer";
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -310,283 +321,302 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
     };
 
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto no-scrollbar">
-                <DialogHeader className="flex flex-row items-center justify-between pr-8">
-                    <div>
-                        <DialogTitle>Settings</DialogTitle>
-                        <DialogDescription>
-                            Manage your planning priorities and execution categories.
-                        </DialogDescription>
+    // === RENDER LOGIC ===
+    const isMobile = useIsMobile();
+
+    const renderHeader = () => (
+        <div className="flex flex-row items-center justify-between pr-4 sm:pr-8 mb-4">
+            <div>
+                {isMobile ? (
+                    <DrawerTitle>Settings</DrawerTitle>
+                ) : (
+                    <DialogTitle>Settings</DialogTitle>
+                )}
+                <div className="text-sm text-muted-foreground">
+                    {isMobile ? (
+                        <DrawerDescription>Manage priorities and categories.</DrawerDescription>
+                    ) : (
+                        <DialogDescription>Manage your planning priorities and execution categories.</DialogDescription>
+                    )}
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground mr-1">Theme</span>
+                <ModeToggle />
+            </div>
+        </div>
+    );
+
+    const renderContent = () => (
+        <Tabs defaultValue={defaultTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
+                <TabsTrigger value="priorities">Priorities</TabsTrigger>
+                <TabsTrigger value="categories">Groups</TabsTrigger>
+                <TabsTrigger value="execution">Activities</TabsTrigger>
+            </TabsList>
+
+            {/* 1. PLANNING PRIORITIES TAB */}
+            <TabsContent value="priorities" className="space-y-4 py-1">
+                <div className="flex gap-2 items-end border-b pb-4">
+                    <div className="flex-1 space-y-2">
+                        <Label>New Priority Name</Label>
+                        <Input placeholder="e.g. Urgent" value={newPriorityName} onChange={(e) => setNewPriorityName(e.target.value)} />
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Theme</span>
-                        <ModeToggle />
+                    <div className="w-[100px] sm:w-[140px] space-y-2">
+                        <Label>Color</Label>
+                        <Select value={newPriorityColor} onValueChange={setNewPriorityColor}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {AVAILABLE_COLORS.map((c) => (
+                                    <SelectItem key={c.name} value={c.value}>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />
+                                            <span className="hidden sm:inline">{c.name}</span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                </DialogHeader>
-
-                <Tabs defaultValue="priorities" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="priorities">Planning Priorities</TabsTrigger>
-                        <TabsTrigger value="categories">Categories</TabsTrigger>
-                        <TabsTrigger value="execution">Execution Categories</TabsTrigger>
-                    </TabsList>
-
-                    {/* 1. PLANNING PRIORITIES TAB */}
-                    <TabsContent value="priorities" className="space-y-4 py-4">
-                        <div className="flex gap-2 items-end border-b pb-4">
-                            <div className="flex-1 space-y-2">
-                                <Label>New Priority Name</Label>
-                                <Input placeholder="e.g. Urgent" value={newPriorityName} onChange={(e) => setNewPriorityName(e.target.value)} />
-                            </div>
-                            <div className="w-[140px] space-y-2">
-                                <Label>Color</Label>
-                                <Select value={newPriorityColor} onValueChange={setNewPriorityColor}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {AVAILABLE_COLORS.map((c) => (
-                                            <SelectItem key={c.name} value={c.value}>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />
-                                                    {c.name}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Button onClick={handleAddPriority}><Plus className="h-4 w-4 mr-2" />Add</Button>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Existing Priorities</Label>
-                            <div className="space-y-2">
-                                {priorities?.map((p) => (
-                                    <div key={p.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
-                                        {editingPriorityId === p.id ? (
-                                            <div className="flex items-center gap-2 flex-1">
-                                                <Input value={editPriorityName} onChange={(e) => setEditPriorityName(e.target.value)} className="h-8" />
-                                                <Select value={editPriorityColor} onValueChange={setEditPriorityColor}>
-                                                    <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <Button size="icon" variant="ghost" onClick={handleUpdatePriority} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
-                                                <Button size="icon" variant="ghost" onClick={() => setEditingPriorityId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></Button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="flex items-center gap-3">
-                                                    <span
-                                                        className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", !p.color.startsWith('#') && p.color)}
-                                                        style={p.color.startsWith('#') ? {
-                                                            backgroundColor: `${p.color}20`,
-                                                            color: p.color,
-                                                            borderColor: `${p.color}40`
-                                                        } : undefined}
-                                                    >
-                                                        {p.name}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <Button variant="ghost" size="icon" onClick={() => { setEditingPriorityId(p.id!); setEditPriorityName(p.name); setEditPriorityColor(p.color); }}><Pencil className="h-4 w-4" /></Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeletePriority(p.id!)}><Trash2 className="h-4 w-4" /></Button>
-                                                </div>
-                                            </>
-                                        )}
+                    <Button onClick={handleAddPriority} size="icon" className="shrink-0"><Plus className="h-4 w-4" /></Button>
+                </div>
+                <div className="space-y-2">
+                    <Label>Existing Priorities</Label>
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                        {priorities?.map((p) => (
+                            <div key={p.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                                {editingPriorityId === p.id ? (
+                                    <div className="flex items-center gap-2 flex-1">
+                                        <Input value={editPriorityName} onChange={(e) => setEditPriorityName(e.target.value)} className="h-8 min-w-0" />
+                                        <Select value={editPriorityColor} onValueChange={setEditPriorityColor}>
+                                            <SelectTrigger className="w-[60px] h-8 px-2"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} /></div></SelectItem>))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button size="icon" variant="ghost" onClick={handleUpdatePriority} className="h-8 w-8 text-success hover:text-success/80 shrink-0"><Check className="h-4 w-4" /></Button>
+                                        <Button size="icon" variant="ghost" onClick={() => setEditingPriorityId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"><X className="h-4 w-4" /></Button>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    </TabsContent>
-
-                    {/* 2. CATEGORIES (TYPES) TAB */}
-                    <TabsContent value="categories" className="space-y-4 py-4">
-                        <div className="flex flex-col space-y-2 mb-4">
-                            <p className="text-sm text-muted-foreground">Define your main categories (e.g., Work, Life, Hobby). These color-code your pie chart.</p>
-                        </div>
-                        <div className="flex gap-2 items-end border-b pb-4">
-                            <div className="flex-1 space-y-2">
-                                <Label>New Category Name</Label>
-                                <Input placeholder="e.g. Hobby" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
-                            </div>
-                            <div className="w-[140px] space-y-2">
-                                <Label>Color</Label>
-                                <Select value={newTypeColor} onValueChange={setNewTypeColor}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {AVAILABLE_COLORS.map((c) => (
-                                            <SelectItem key={c.name} value={c.value}>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />
-                                                    {c.name}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Button onClick={handleAddType}><Plus className="h-4 w-4 mr-2" />Add</Button>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Existing Categories</Label>
-                            {categoryTypes.map((t) => (
-                                <div key={t.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
-                                    {editingTypeId === t.id ? (
-                                        <div className="flex items-center gap-2 flex-1">
-                                            <Input value={editTypeName} onChange={(e) => setEditTypeName(e.target.value)} className="h-8" />
-                                            <Select value={editTypeColor} onValueChange={setEditTypeColor}>
-                                                <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
-                                                </SelectContent>
-                                            </Select>
-                                            <Button size="icon" variant="ghost" onClick={handleUpdateType} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
-                                            <Button size="icon" variant="ghost" onClick={() => setEditingTypeId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></Button>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center gap-3">
+                                            <span
+                                                className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", !p.color.startsWith('#') && p.color)}
+                                                style={p.color.startsWith('#') ? {
+                                                    backgroundColor: `${p.color}20`,
+                                                    color: p.color,
+                                                    borderColor: `${p.color}40`
+                                                } : undefined}
+                                            >
+                                                {p.name}
+                                            </span>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <div className="flex items-center gap-3">
-                                                <span
-                                                    className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", !t.color?.startsWith('#') && t.color)}
-                                                    style={t.color?.startsWith('#') ? {
-                                                        backgroundColor: `${t.color}20`,
-                                                        color: t.color,
-                                                        borderColor: `${t.color}40`
-                                                    } : undefined}
-                                                >
-                                                    {t.name}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name); setEditTypeColor(t.color || AVAILABLE_COLORS[5].value); }}><Pencil className="h-4 w-4" /></Button>
-                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteType(t.id)}><Trash2 className="h-4 w-4" /></Button>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </TabsContent>
-
-                    {/* 3. EXECUTION CATEGORIES TAB */}
-                    <TabsContent value="execution" className="space-y-4 py-4">
-                        <div className="flex flex-col space-y-2 mb-4">
-                            <p className="text-sm text-muted-foreground">Add specific activities for your daily execution, grouped by the categories defined above.</p>
-                        </div>
-                        <div className="flex gap-2 items-end border-b pb-4">
-                            <div className="flex-1 space-y-2">
-                                <Label>New Activity Name</Label>
-                                <Input placeholder="e.g. Deep Work" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
-                            </div>
-                            <div className="w-[140px] space-y-2">
-                                <Label>Category</Label>
-                                <Select value={newCategoryType} onValueChange={setNewCategoryType}>
-                                    <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {categoryTypes.map(t => (
-                                            <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="w-[140px] space-y-2">
-                                <Label>Color</Label>
-                                <Select value={newCategoryColor} onValueChange={setNewCategoryColor}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <Button onClick={handleAddCategory}><Plus className="h-4 w-4 mr-2" />Add</Button>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Existing Activities</Label>
-                            <div className="grid gap-4">
-                                {categoryTypes.map((type) => (
-                                    <div key={type.id}>
-                                        <h4 className="text-sm font-medium text-muted-foreground mb-2 capitalize">{type.name}</h4>
-                                        <div className="space-y-2">
-                                            {categories?.filter(c => c.type === type.name).map((c) => (
-                                                <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
-                                                    {editingCategoryId === c.id ? (
-                                                        <div className="flex items-center gap-2 flex-1">
-                                                            <Input value={editCategoryName} onChange={(e) => setEditCategoryName(e.target.value)} className="h-8 flex-1" />
-
-                                                            {/* EDIT CATEGORY TYPE */}
-                                                            <Select value={editCategoryType} onValueChange={setEditCategoryType}>
-                                                                <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
-                                                                <SelectContent>
-                                                                    {categoryTypes.map(t => (
-                                                                        <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
-                                                                    ))}
-                                                                </SelectContent>
-                                                            </Select>
-
-                                                            <Select value={editCategoryColor} onValueChange={setEditCategoryColor}>
-                                                                <SelectTrigger className="w-[140px] h-8"><SelectValue /></SelectTrigger>
-                                                                <SelectContent>
-                                                                    {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                            <Button size="icon" variant="ghost" onClick={handleUpdateCategory} className="h-8 w-8 text-success hover:text-success/80"><Check className="h-4 w-4" /></Button>
-                                                            <Button size="icon" variant="ghost" onClick={() => setEditingCategoryId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></Button>
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            <div className="flex items-center gap-3">
-                                                                <span
-                                                                    className={cn("text-sm font-medium", !c.color.startsWith('#') && c.color.split(' ')[1])}
-                                                                    style={c.color.startsWith('#') ? { color: c.color } : undefined}
-                                                                >
-                                                                    {c.name}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center gap-1">
-                                                                <Button variant="ghost" size="icon" onClick={() => {
-                                                                    setEditingCategoryId(c.id!);
-                                                                    setEditCategoryName(c.name);
-                                                                    setEditCategoryType(c.type); // Set initial type
-                                                                    setEditCategoryColor(c.color);
-                                                                }}><Pencil className="h-4 w-4" /></Button>
-                                                                <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(c.id!)}><Trash2 className="h-4 w-4" /></Button>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            {categories?.filter(c => c.type === type.name).length === 0 && (
-                                                <p className="text-xs text-muted-foreground italic px-2">No activities</p>
-                                            )}
+                                        <div className="flex items-center gap-1">
+                                            <Button variant="ghost" size="icon" onClick={() => { setEditingPriorityId(p.id!); setEditPriorityName(p.name); setEditPriorityColor(p.color); }}><Pencil className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeletePriority(p.id!)}><Trash2 className="h-4 w-4" /></Button>
                                         </div>
-                                    </div>
-                                ))}
-                                {/* Handle orphan categories whose type might have been deleted or manually changed */}
-                                {categories?.filter(c => !categoryTypes.find(t => t.name === c.type)).length > 0 && (
-                                    <div>
-                                        <h4 className="text-sm font-medium text-destructive mb-2 capitalize">Uncategorized / Unknown Type</h4>
-                                        <div className="space-y-2">
-                                            {categories?.filter(c => !categoryTypes.find(t => t.name === c.type)).map((c) => (
-                                                <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg bg-card border-destructive/20">
-                                                    <span
-                                                        className={cn("text-sm font-medium", !c.color.startsWith('#') && c.color.split(' ')[1])}
-                                                        style={c.color.startsWith('#') ? { color: c.color } : undefined}
-                                                    >
-                                                        {c.name} <span className="text-[10px] text-muted-foreground">({c.type})</span>
-                                                    </span>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(c.id!)}><Trash2 className="h-4 w-4" /></Button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+                                    </>
                                 )}
                             </div>
-                        </div>
-                    </TabsContent>
-                </Tabs>
+                        ))}
+                    </div>
+                </div>
+            </TabsContent>
+
+            {/* 2. CATEGORIES (TYPES) TAB */}
+            <TabsContent value="categories" className="space-y-4 py-1">
+                <div className="flex flex-col space-y-2 mb-4">
+                    <p className="text-sm text-muted-foreground">Define your main groups (e.g., Work, Life).</p>
+                </div>
+                <div className="flex gap-2 items-end border-b pb-4">
+                    <div className="flex-1 space-y-2">
+                        <Label>New Group Name</Label>
+                        <Input placeholder="e.g. Hobby" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
+                    </div>
+                    <div className="w-[100px] sm:w-[140px] space-y-2">
+                        <Label>Color</Label>
+                        <Select value={newTypeColor} onValueChange={setNewTypeColor}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {AVAILABLE_COLORS.map((c) => (
+                                    <SelectItem key={c.name} value={c.value}>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />
+                                            <span className="hidden sm:inline">{c.name}</span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Button onClick={handleAddType} size="icon" className="shrink-0"><Plus className="h-4 w-4" /></Button>
+                </div>
+                <div className="space-y-2">
+                    <Label>Existing Groups</Label>
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                        {categoryTypes.map((t) => (
+                            <div key={t.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                                {editingTypeId === t.id ? (
+                                    <div className="flex items-center gap-2 flex-1">
+                                        <Input value={editTypeName} onChange={(e) => setEditTypeName(e.target.value)} className="h-8 min-w-0" />
+                                        <Select value={editTypeColor} onValueChange={setEditTypeColor}>
+                                            <SelectTrigger className="w-[60px] h-8 px-2"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} /></div></SelectItem>))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button size="icon" variant="ghost" onClick={handleUpdateType} className="h-8 w-8 text-success hover:text-success/80 shrink-0"><Check className="h-4 w-4" /></Button>
+                                        <Button size="icon" variant="ghost" onClick={() => setEditingTypeId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"><X className="h-4 w-4" /></Button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex items-center gap-3">
+                                            <span
+                                                className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", !t.color?.startsWith('#') && t.color)}
+                                                style={t.color?.startsWith('#') ? {
+                                                    backgroundColor: `${t.color}20`,
+                                                    color: t.color,
+                                                    borderColor: `${t.color}40`
+                                                } : undefined}
+                                            >
+                                                {t.name}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <Button variant="ghost" size="icon" onClick={() => { setEditingTypeId(t.id); setEditTypeName(t.name); setEditTypeColor(t.color || AVAILABLE_COLORS[5].value); }}><Pencil className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteType(t.id)}><Trash2 className="h-4 w-4" /></Button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </TabsContent>
+
+            {/* 3. EXECUTION CATEGORIES TAB */}
+            <TabsContent value="execution" className="space-y-4 py-1">
+                <div className="flex flex-col space-y-2 mb-4">
+                    <p className="text-sm text-muted-foreground">Add specific activities.</p>
+                </div>
+                <div className="grid grid-cols-[1fr_1fr] sm:grid-cols-[1fr_130px_130px_auto] gap-2 items-end border-b pb-4">
+                    <div className="col-span-2 sm:col-span-1 space-y-2">
+                        <Label>Name</Label>
+                        <Input placeholder="Deep Work" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Group</Label>
+                        <Select value={newCategoryType} onValueChange={setNewCategoryType}>
+                            <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                            <SelectContent>
+                                {categoryTypes.map(t => (
+                                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Color</Label>
+                        <Select value={newCategoryColor} onValueChange={setNewCategoryColor}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} />{c.name}</div></SelectItem>))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <Button onClick={handleAddCategory} size="icon" className="shrink-0 mb-0.5 ml-auto sm:ml-0"><Plus className="h-4 w-4" /></Button>
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Existing Activities</Label>
+                    <div className="grid gap-4 max-h-[300px] overflow-y-auto pr-1">
+                        {categoryTypes.map((type) => (
+                            <div key={type.id}>
+                                <h4 className="text-sm font-medium text-muted-foreground mb-2 capitalize sticky top-0 bg-background/95 backdrop-blur z-10 py-1">{type.name}</h4>
+                                <div className="space-y-2">
+                                    {categories?.filter(c => c.type === type.name).map((c) => (
+                                        <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                                            {editingCategoryId === c.id ? (
+                                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1">
+                                                    <Input value={editCategoryName} onChange={(e) => setEditCategoryName(e.target.value)} className="h-8 flex-1" />
+
+                                                    <div className="flex gap-2">
+                                                        <Select value={editCategoryType} onValueChange={setEditCategoryType}>
+                                                            <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                                                            <SelectContent>
+                                                                {categoryTypes.map(t => (
+                                                                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+
+                                                        <Select value={editCategoryColor} onValueChange={setEditCategoryColor}>
+                                                            <SelectTrigger className="w-[60px] h-8 px-2"><SelectValue /></SelectTrigger>
+                                                            <SelectContent>
+                                                                {AVAILABLE_COLORS.map((c) => (<SelectItem key={c.name} value={c.value}><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.value }} /></div></SelectItem>))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <Button size="icon" variant="ghost" onClick={handleUpdateCategory} className="h-8 w-8 text-success hover:text-success/80 shrink-0"><Check className="h-4 w-4" /></Button>
+                                                        <Button size="icon" variant="ghost" onClick={() => setEditingCategoryId(null)} className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"><X className="h-4 w-4" /></Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-3">
+                                                        <span
+                                                            className={cn("text-sm font-medium", !c.color.startsWith('#') && c.color.split(' ')[1])}
+                                                            style={c.color.startsWith('#') ? { color: c.color } : undefined}
+                                                        >
+                                                            {c.name}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <Button variant="ghost" size="icon" onClick={() => {
+                                                            setEditingCategoryId(c.id!);
+                                                            setEditCategoryName(c.name);
+                                                            setEditCategoryType(c.type); // Set initial type
+                                                            setEditCategoryColor(c.color);
+                                                        }}><Pencil className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(c.id!)}><Trash2 className="h-4 w-4" /></Button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </TabsContent>
+        </Tabs>
+    );
+
+    if (isMobile) {
+        return (
+            <Drawer open={open} onOpenChange={onOpenChange}>
+                <DrawerContent className="max-h-[90vh]">
+                    <DrawerHeader>
+                        {renderHeader()}
+                    </DrawerHeader>
+                    <div className="px-4 pb-8 overflow-y-auto">
+                        {renderContent()}
+                    </div>
+                </DrawerContent>
+            </Drawer>
+        );
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden p-0 flex flex-col bg-card border-border">
+                <div className="px-6 pt-6 pb-2">
+                    {renderHeader()}
+                </div>
+
+                <div className="overflow-y-auto px-6 py-4 flex-1 custom-scrollbar">
+                    {renderContent()}
+                </div>
             </DialogContent>
         </Dialog>
     );
