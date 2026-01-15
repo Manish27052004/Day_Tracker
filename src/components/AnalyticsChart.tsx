@@ -35,6 +35,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { useUserPreferences } from '@/contexts/UserPreferencesContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 import GoalSettingsDialog from './GoalSettingsDialog';
 
 // Helper to map DB colors to CSS variables for Recharts
@@ -357,10 +358,13 @@ const AnalyticsChart = () => {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  const isMobile = useIsMobile();
+
   // Dynamic Height Logic
   const PIXELS_PER_HOUR = 60;
   const MIN_DISPLAY_HOURS = 10;
-  const VIEW_PORT_HOURS = 12; // Approx 720px max height before scrolling
+  // Reduce viewport on mobile to prevent scroll locking the whole page
+  const VIEW_PORT_HOURS = isMobile ? 8 : 12;
 
   // Find the maximum value in the current dataset
   const maxSessionDuration = useMemo(() => {
@@ -394,10 +398,10 @@ const AnalyticsChart = () => {
       <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-card p-4 rounded-xl border shadow-sm">
 
         {/* 1. Date Picker */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className={cn("min-w-[240px] w-auto justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+              <Button variant="outline" className={cn("min-w-[240px] w-full md:w-auto justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {dateRange?.from ? (
                   dateRange.to ? (
@@ -426,24 +430,26 @@ const AnalyticsChart = () => {
           </Popover>
 
           {/* Goal Settings Button */}
-          <GoalSettingsDialog
-            analyticsCategories={displayCategories}
-            analyticsTypes={displayTypes}
-            onGoalsUpdated={setGoals}
-          />
+          <div className="w-full sm:w-auto">
+            <GoalSettingsDialog
+              analyticsCategories={displayCategories}
+              analyticsTypes={displayTypes}
+              onGoalsUpdated={setGoals}
+            />
+          </div>
         </div>
 
         {/* 2. View Mode Toggle */}
-        <div className="flex bg-muted p-1 rounded-lg">
+        <div className="flex bg-muted p-1 rounded-lg w-full md:w-auto">
           <button
             onClick={() => { setViewMode('category'); }}
-            className={cn("px-4 py-1.5 text-sm font-medium rounded-md transition-all", viewMode === 'category' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+            className={cn("flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all", viewMode === 'category' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
           >
             By Subcategory
           </button>
           <button
             onClick={() => { setViewMode('type'); }}
-            className={cn("px-4 py-1.5 text-sm font-medium rounded-md transition-all", viewMode === 'type' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+            className={cn("flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all", viewMode === 'type' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
           >
             By Category
           </button>
