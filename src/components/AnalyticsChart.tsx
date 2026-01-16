@@ -371,7 +371,7 @@ const AnalyticsChart = () => {
   const isMobile = useIsMobile();
 
   // Dynamic Height Logic
-  const PIXELS_PER_HOUR = 60;
+  const PIXELS_PER_HOUR = 40; // Dense mode: Show more in less space
   const MIN_DISPLAY_HOURS = 10;
   // Reduce viewport on mobile to prevent scroll locking the whole page
   const VIEW_PORT_HOURS = isMobile ? 8 : 12;
@@ -392,34 +392,43 @@ const AnalyticsChart = () => {
   }, [chartData, chartType]);
 
   // Dynamic Domain: At least MIN_DISPLAY_HOURS, scale with data up to 24
-  const domainMax = Math.min(24, Math.max(MIN_DISPLAY_HOURS, Math.ceil(maxSessionDuration * 1.1))); // +10% headroom
+  // If Maximized, force 24 hours to "zoom out" and show full day scale without scrolling.
+  const domainMax = isMaximized ? 24 : Math.min(24, Math.max(MIN_DISPLAY_HOURS, Math.ceil(maxSessionDuration * 1.1))); // +10% headroom
 
-  const TOTAL_HEIGHT = domainMax * PIXELS_PER_HOUR;
-  const MAX_VIEW_HEIGHT = VIEW_PORT_HOURS * PIXELS_PER_HOUR;
+  const TOTAL_HEIGHT_PX = domainMax * PIXELS_PER_HOUR;
+  const VIEW_PORT_HEIGHT_PX = VIEW_PORT_HOURS * PIXELS_PER_HOUR;
 
-  // MAXIMIZED: Use window height - padding. NORMAL: Use Viewport calculation.
-  const containerHeight = isMaximized ? 'calc(100vh - 200px)' : `${MAX_VIEW_HEIGHT}px`;
+  // MAXIMIZED: 
+  // Container = Full Screen - padding (to fit window)
+  // Chart Height = 100% of Container (Scale to fit, NO SCROLL)
+
+  // NORMAL:
+  // Container = Viewport Fixed Height
+  // Chart Height = Calculated Total Pixel Height (Allow Scroll)
+
+  const containerHeight = isMaximized ? 'calc(100vh - 80px)' : `${VIEW_PORT_HEIGHT_PX}px`;
+  const chartHeightStyle = isMaximized ? '100%' : `${TOTAL_HEIGHT_PX}px`;
 
   // Generate ticks based on dynamic domain
   const yTicks = Array.from({ length: domainMax + 1 }, (_, i) => i);
 
-  // Auto-scroll logic (scroll to bottom to show 0-axis context if overflowing)
+  // Auto-scroll logic (ONLY for Normal mode if content overflows)
   useEffect(() => {
-    if (!isMaximized && scrollContainerRef.current && TOTAL_HEIGHT > MAX_VIEW_HEIGHT) {
+    if (!isMaximized && scrollContainerRef.current && TOTAL_HEIGHT_PX > VIEW_PORT_HEIGHT_PX) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  }, [chartData, TOTAL_HEIGHT, MAX_VIEW_HEIGHT, isMaximized]);
+  }, [chartData, TOTAL_HEIGHT_PX, VIEW_PORT_HEIGHT_PX, isMaximized]);
 
   // WRAPPER CLASS for Maximize Mode
   const containerClass = isMaximized
-    ? "fixed inset-0 z-50 bg-background/95 backdrop-blur-sm p-4 sm:p-8 flex flex-col animate-in fade-in duration-200"
+    ? "fixed inset-0 z-50 bg-background/95 backdrop-blur-sm p-4 sm:p-6 flex flex-col animate-in fade-in duration-200"
     : "bg-card p-6 rounded-xl border shadow-sm transition-all duration-300";
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={isMaximized ? "" : "space-y-6"}
+      className={isMaximized ? "w-full h-full" : "space-y-6"} // Clean wrapper for maximized
     >
       {/* CONTROLS HEADER (Hidden if Maximized) */}
       {!isMaximized && (
@@ -618,12 +627,12 @@ const AnalyticsChart = () => {
           style={{ maxHeight: containerHeight }}
         >
           <div className="w-full overflow-x-auto pb-4 h-full">
-            <div style={{ minWidth: `${minWidth}px`, height: `${TOTAL_HEIGHT}px` }}>
+            <div style={{ minWidth: `${minWidth}px`, height: chartHeightStyle }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                   data={chartData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  barGap={2}
+                  margin={{ top: 20, right: 50, left: 20, bottom: 5 }}
+                  barGap={1}
                 >
                   <defs>
                     {/* Define gradients for each visible key */}
@@ -656,6 +665,7 @@ const AnalyticsChart = () => {
                     allowDecimals={false}
                     domain={[0, domainMax]}
                     ticks={yTicks}
+                    interval={0}
                   />
                   <Tooltip
                     cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
@@ -676,7 +686,7 @@ const AnalyticsChart = () => {
                       stackId="a"
                       fill={getColorVar(item.color)}
                       radius={[0, 0, 0, 0]}
-                      maxBarSize={80}
+                      maxBarSize={50}
                       name={item.name}
                       animationDuration={500}
                     />
