@@ -1,6 +1,7 @@
 import { ClipboardList, Play, PieChart } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export type Phase = 'planning' | 'execution' | 'breakdown';
 
@@ -16,9 +17,11 @@ const phases = [
 ];
 
 const PhaseNavigation = ({ activePhase, onPhaseChange }: PhaseNavigationProps) => {
+  const isMobile = useIsMobile();
+
   return (
     <motion.div
-      className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+      className="grid grid-cols-3 gap-2 sm:gap-3"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.2 }}
@@ -32,7 +35,7 @@ const PhaseNavigation = ({ activePhase, onPhaseChange }: PhaseNavigationProps) =
             key={phase.id}
             onClick={() => onPhaseChange(phase.id)}
             className={cn(
-              'phase-card relative overflow-hidden min-h-[80px]',
+              'phase-card relative overflow-hidden min-h-[50px] sm:min-h-[80px] p-1 sm:p-4',
               isActive && 'active'
             )}
             whileHover={{ scale: 1.02 }}
@@ -49,12 +52,14 @@ const PhaseNavigation = ({ activePhase, onPhaseChange }: PhaseNavigationProps) =
               />
             )}
             <Icon className={cn(
-              'h-5 w-5 transition-colors duration-200',
-              isActive ? 'text-primary' : 'text-muted-foreground'
+              'transition-colors duration-200',
+              isActive ? 'text-primary' : 'text-muted-foreground',
+              isMobile ? 'h-4 w-4 mb-0.5' : 'h-5 w-5 mb-1'
             )} />
             <span className={cn(
-              'text-sm font-medium transition-colors duration-200',
-              isActive ? 'text-primary' : 'text-muted-foreground'
+              'font-medium transition-colors duration-200 text-center leading-tight',
+              isActive ? 'text-primary' : 'text-muted-foreground',
+              isMobile ? 'text-[10px]' : 'text-sm'
             )}>
               {phase.label}
             </span>

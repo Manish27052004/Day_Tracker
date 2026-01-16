@@ -582,8 +582,8 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
                     value={task.description}
                     onChange={(value) => updateTask(task.id!, { description: value })}
                     placeholder="Description..."
-                    className="ghost-input min-h-[32px] text-xs resize-none"
-                    rows={1}
+                    className="ghost-input min-h-[80px] text-xs resize-none"
+                    rows={3}
                   />
 
                   <div className="flex flex-col items-end">

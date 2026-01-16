@@ -44,8 +44,8 @@ const DescriptionInput = ({ sessionId, initialDescription, selectedDate, onUpdat
       onChange={(e) => setDescription(e.target.value)}
       onBlur={handleBlur}
       placeholder="What did you accomplish?"
-      className="ghost-input min-h-[32px] text-xs resize-none"
-      rows={1}
+      className="ghost-input min-h-[80px] text-xs resize-none"
+      rows={3}
     />
   );
 };
