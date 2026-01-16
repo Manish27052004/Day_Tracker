@@ -785,16 +785,15 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
 
       {/* Add Task Button with Template Dropdown */}
       <motion.div
-        className="p-4 border-t border-border/50 flex gap-2"
-        whileHover={{ backgroundColor: 'hsl(var(--muted) / 0.3)' }}
+        className="p-3 border-t border-dashed border-border/60 flex gap-2 items-center opacity-80 hover:opacity-100 transition-opacity"
       >
         <Button
           variant="ghost"
           onClick={() => addTask()}
-          className="flex-1 justify-start text-muted-foreground hover:text-foreground transition-colors"
+          className="flex-1 justify-start text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-dashed border-transparent hover:border-border/50 h-9"
         >
-          <Plus className="h-4 w-4 mr-2" />
-          Add task
+          <Plus className="h-4 w-4 mr-2 opacity-50" />
+          Add task...
         </Button>
         <TemplateDropdown onTemplateSelect={handleTemplateSelect} />
         <Button
@@ -802,7 +801,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
           size="icon"
           onClick={() => setSettingsOpen(true)}
           title="Settings"
-          className="text-muted-foreground hover:text-foreground"
+          className="h-9 w-9 text-muted-foreground hover:text-foreground"
         >
           <Settings className="h-4 w-4" />
         </Button>

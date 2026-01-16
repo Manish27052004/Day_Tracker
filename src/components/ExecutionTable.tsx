@@ -741,23 +741,24 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
 
       {/* Add Session Button */}
       <motion.div
-        className="p-4 border-t border-border/50 flex gap-2"
-        whileHover={{ backgroundColor: 'hsl(var(--muted) / 0.3)' }}
+        className="p-3 bg-gradient-to-r from-primary/5 to-transparent border-t border-primary/10 flex gap-3 items-center sticky bottom-0 backdrop-blur-[2px] z-10"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
       >
         <Button
-          variant="ghost"
+          variant="secondary"
           onClick={addSession}
-          className="flex-1 justify-start text-muted-foreground hover:text-foreground transition-colors"
+          className="flex-1 justify-center font-medium shadow-sm hover:translate-y-[-1px] transition-all active:translate-y-[0px] h-10"
         >
-          <Plus className="h-4 w-4 mr-2" />
-          Add session
+          <Plus className="h-4 w-4 mr-2 text-primary" />
+          Add Session
         </Button>
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setSettingsOpen(true)}
           title="Settings"
-          className="text-muted-foreground hover:text-foreground"
+          className="h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-background/80"
         >
           <Settings className="h-4 w-4" />
         </Button>

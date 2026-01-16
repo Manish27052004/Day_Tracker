@@ -5,6 +5,7 @@ import {
   ComposedChart,
   Line,
   LabelList,
+  Area,
   Bar,
   XAxis,
   YAxis,
@@ -20,7 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Filter, Archive } from 'lucide-react';
+import { CalendarIcon, Filter, Archive, BarChart3, LineChart, Activity, Maximize2, Minimize2 } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import {
   fetchAnalyticsData,
@@ -54,6 +55,7 @@ const getColorVar = (dbColorClass: string | undefined): string => {
 const AnalyticsChart = () => {
   const { user } = useAuth();
   const { dayStartHour } = useUserPreferences();
+  const [isMaximized, setIsMaximized] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().setDate(new Date().getDate() - 7)), // Last 7 days
     to: new Date(),
@@ -61,6 +63,10 @@ const AnalyticsChart = () => {
 
   const [viewMode, setViewMode] = useState<'type' | 'category'>(() => {
     return (localStorage.getItem('analytics_view_mode') as 'type' | 'category') || 'category';
+  });
+
+  const [chartType, setChartType] = useState<'bar' | 'area' | 'line'>(() => {
+    return (localStorage.getItem('analytics_chart_type') as 'bar' | 'area' | 'line') || 'bar';
   });
 
   const [dbCategories, setDbCategories] = useState<AnalyticsCategory[]>([]);
@@ -76,6 +82,10 @@ const AnalyticsChart = () => {
   useEffect(() => {
     localStorage.setItem('analytics_view_mode', viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem('analytics_chart_type', chartType);
+  }, [chartType]);
 
   useEffect(() => {
     localStorage.setItem('analytics_show_archived', String(showArchived));
@@ -369,8 +379,17 @@ const AnalyticsChart = () => {
   // Find the maximum value in the current dataset
   const maxSessionDuration = useMemo(() => {
     if (chartData.length === 0) return 0;
+    // For Line charts (non-stacked), max is max single category. For Bar/Area (stacked), max is total.
+    if (chartType === 'line') {
+      // Find max single key value
+      return Math.max(...chartData.map(d => {
+        const keys = Object.keys(d).filter(k => k !== 'date' && k !== '_totalDuration' && k !== '_absoluteTotal');
+        if (keys.length === 0) return 0;
+        return Math.max(...keys.map(k => (d[k] as number)));
+      }));
+    }
     return Math.max(...chartData.map(d => (d._absoluteTotal || 0)));
-  }, [chartData]);
+  }, [chartData, chartType]);
 
   // Dynamic Domain: At least MIN_DISPLAY_HOURS, scale with data up to 24
   const domainMax = Math.min(24, Math.max(MIN_DISPLAY_HOURS, Math.ceil(maxSessionDuration * 1.1))); // +10% headroom
@@ -378,177 +397,227 @@ const AnalyticsChart = () => {
   const TOTAL_HEIGHT = domainMax * PIXELS_PER_HOUR;
   const MAX_VIEW_HEIGHT = VIEW_PORT_HOURS * PIXELS_PER_HOUR;
 
+  // MAXIMIZED: Use window height - padding. NORMAL: Use Viewport calculation.
+  const containerHeight = isMaximized ? 'calc(100vh - 200px)' : `${MAX_VIEW_HEIGHT}px`;
+
   // Generate ticks based on dynamic domain
   const yTicks = Array.from({ length: domainMax + 1 }, (_, i) => i);
 
   // Auto-scroll logic (scroll to bottom to show 0-axis context if overflowing)
   useEffect(() => {
-    if (scrollContainerRef.current && TOTAL_HEIGHT > MAX_VIEW_HEIGHT) {
+    if (!isMaximized && scrollContainerRef.current && TOTAL_HEIGHT > MAX_VIEW_HEIGHT) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  }, [chartData, TOTAL_HEIGHT, MAX_VIEW_HEIGHT]);
+  }, [chartData, TOTAL_HEIGHT, MAX_VIEW_HEIGHT, isMaximized]);
+
+  // WRAPPER CLASS for Maximize Mode
+  const containerClass = isMaximized
+    ? "fixed inset-0 z-50 bg-background/95 backdrop-blur-sm p-4 sm:p-8 flex flex-col animate-in fade-in duration-200"
+    : "bg-card p-6 rounded-xl border shadow-sm transition-all duration-300";
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className={isMaximized ? "" : "space-y-6"}
     >
-      {/* CONTROLS HEADER */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-card p-4 rounded-xl border shadow-sm">
+      {/* CONTROLS HEADER (Hidden if Maximized) */}
+      {!isMaximized && (
+        <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-card p-4 rounded-xl border shadow-sm">
 
-        {/* 1. Date Picker */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className={cn("min-w-[240px] w-full md:w-auto justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateRange?.from ? (
-                  dateRange.to ? (
-                    <>
-                      {format(dateRange.from, "LLL dd, y")} -{" "}
-                      {format(dateRange.to, "LLL dd, y")}
-                    </>
+          {/* 1. Date Picker */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full xl:w-auto">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("min-w-[240px] w-full md:w-auto justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "LLL dd, y")} -{" "}
+                        {format(dateRange.to, "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(dateRange.from, "LLL dd, y")
+                    )
                   ) : (
-                    format(dateRange.from, "LLL dd, y")
-                  )
-                ) : (
-                  <span>Pick a date</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={dateRange?.from}
-                selected={dateRange}
-                onSelect={setDateRange}
-                numberOfMonths={2}
-              />
-            </PopoverContent>
-          </Popover>
+                    <span>Pick a date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
 
-          {/* Goal Settings Button */}
-          <div className="w-full sm:w-auto">
-            <GoalSettingsDialog
-              analyticsCategories={displayCategories}
-              analyticsTypes={displayTypes}
-              onGoalsUpdated={setGoals}
-            />
+            {/* Goal Settings Button */}
+            <div className="w-full sm:w-auto">
+              <GoalSettingsDialog
+                analyticsCategories={displayCategories}
+                analyticsTypes={displayTypes}
+                onGoalsUpdated={setGoals}
+              />
+            </div>
+          </div>
+
+          {/* 2. Grouped Toggles: View Mode & Chart Type */}
+          <div className="flex flex-col md:flex-row gap-2 w-full xl:w-auto">
+            {/* Chart Type Toggle */}
+            <div className="flex bg-muted p-1 rounded-lg w-full md:w-auto">
+              <button
+                onClick={() => { setChartType('bar'); }}
+                title="Bar Chart (Volume)"
+                className={cn("flex-1 px-3 py-1.5 rounded-md transition-all flex items-center justify-center", chartType === 'bar' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                <BarChart3 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => { setChartType('line'); }}
+                title="Line Chart (Trends)"
+                className={cn("flex-1 px-3 py-1.5 rounded-md transition-all flex items-center justify-center", chartType === 'line' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                <LineChart className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => { setChartType('area'); }}
+                title="Area Chart (Flow)"
+                className={cn("flex-1 px-3 py-1.5 rounded-md transition-all flex items-center justify-center", chartType === 'area' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                <Activity className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex bg-muted p-1 rounded-lg w-full md:w-auto">
+              <button
+                onClick={() => { setViewMode('category'); }}
+                className={cn("flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all", viewMode === 'category' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                By Subcategory
+              </button>
+              <button
+                onClick={() => { setViewMode('type'); }}
+                className={cn("flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all", viewMode === 'type' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                By Category
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* 2. View Mode Toggle */}
-        <div className="flex bg-muted p-1 rounded-lg w-full md:w-auto">
-          <button
-            onClick={() => { setViewMode('category'); }}
-            className={cn("flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all", viewMode === 'category' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
-          >
-            By Subcategory
-          </button>
-          <button
-            onClick={() => { setViewMode('type'); }}
-            className={cn("flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all", viewMode === 'type' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
-          >
-            By Category
-          </button>
-        </div>
-      </div>
-
-      {/* FILTERS SECTION */}
-      <div className="bg-card p-4 rounded-xl border shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Filter className="h-4 w-4" />
-            Filter Data
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn("h-6 w-6 ml-2", showArchived ? "text-primary bg-primary/10" : "text-muted-foreground")}
-              onClick={() => setShowArchived(!showArchived)}
-              title={showArchived ? "Hide Archived" : "Show Archived"}
-            >
-              <Archive className="h-3.5 w-3.5" />
+      {/* FILTERS SECTION (Hidden if Maximized) */}
+      {!isMaximized && (
+        <div className="bg-card p-4 rounded-xl border shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Filter className="h-4 w-4" />
+              Filter Data
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("h-6 w-6 ml-2", showArchived ? "text-primary bg-primary/10" : "text-muted-foreground")}
+                onClick={() => setShowArchived(!showArchived)}
+                title={showArchived ? "Hide Archived" : "Show Archived"}
+              >
+                <Archive className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" onClick={toggleAll} className="h-8 text-xs">
+              {selectedIds.length > 0 ? 'Deselect All' : 'Select All'}
             </Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={toggleAll} className="h-8 text-xs">
-            {selectedIds.length > 0 ? 'Deselect All' : 'Select All'}
-          </Button>
-        </div>
-        <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto custom-scrollbar">
-          {/* Active Items */}
-          {(viewMode === 'category' ? displayCategories : displayTypes)
-            .filter(item => item.is_active)
-            .map((item) => (
-              <Button
-                key={item.id}
-                variant={selectedIds.includes(item.id) ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => toggleSelection(item.id)}
-                className={cn(
-                  "text-xs h-7 transition-all",
-                  selectedIds.includes(item.id)
-                    ? "ring-1 ring-offset-1 ring-primary/20"
-                    : "opacity-70 grayscale hover:grayscale-0 hover:opacity-100"
-                )}
-                style={selectedIds.includes(item.id) ? {
-                  backgroundColor: getColorVar(item.color),
-                  borderColor: getColorVar(item.color),
-                  color: 'white' // Assuming dark/colored bg
-                } : {}}
-              >
-                {item.name}
-              </Button>
-            ))}
+          <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto custom-scrollbar">
+            {/* Active Items */}
+            {(viewMode === 'category' ? displayCategories : displayTypes)
+              .filter(item => item.is_active)
+              .map((item) => (
+                <Button
+                  key={item.id}
+                  variant={selectedIds.includes(item.id) ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => toggleSelection(item.id)}
+                  className={cn(
+                    "text-xs h-7 transition-all",
+                    selectedIds.includes(item.id)
+                      ? "ring-1 ring-offset-1 ring-primary/20"
+                      : "opacity-70 grayscale hover:grayscale-0 hover:opacity-100"
+                  )}
+                  style={selectedIds.includes(item.id) ? {
+                    backgroundColor: getColorVar(item.color),
+                    borderColor: getColorVar(item.color),
+                    color: 'white' // Assuming dark/colored bg
+                  } : {}}
+                >
+                  {item.name}
+                </Button>
+              ))}
 
-          {/* Archived Items Separator */}
-          {showArchived && (viewMode === 'category' ? displayCategories : displayTypes).some(item => !item.is_active) && (
-            <div className="w-full h-px bg-border my-1" />
-          )}
+            {/* Archived Items Separator */}
+            {showArchived && (viewMode === 'category' ? displayCategories : displayTypes).some(item => !item.is_active) && (
+              <div className="w-full h-px bg-border my-1" />
+            )}
 
-          {/* Archived Items */}
-          {showArchived && (viewMode === 'category' ? displayCategories : displayTypes)
-            .filter(item => !item.is_active)
-            .map((item) => (
-              <Button
-                key={item.id}
-                variant={selectedIds.includes(item.id) ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => toggleSelection(item.id)}
-                className={cn(
-                  "text-xs h-7 transition-all opacity-60 hover:opacity-100",
-                  selectedIds.includes(item.id)
-                    ? "ring-1 ring-offset-1 ring-primary/20"
-                    : "grayscale"
-                )}
-                style={selectedIds.includes(item.id) ? {
-                  backgroundColor: getColorVar(item.color),
-                  borderColor: getColorVar(item.color),
-                  color: 'white'
-                } : {}}
-              >
-                {item.name}
-                <span className="ml-1.5 text-[10px] opacity-60">(Archived)</span>
-              </Button>
-            ))}
+            {/* Archived Items */}
+            {showArchived && (viewMode === 'category' ? displayCategories : displayTypes)
+              .filter(item => !item.is_active)
+              .map((item) => (
+                <Button
+                  key={item.id}
+                  variant={selectedIds.includes(item.id) ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => toggleSelection(item.id)}
+                  className={cn(
+                    "text-xs h-7 transition-all opacity-60 hover:opacity-100",
+                    selectedIds.includes(item.id)
+                      ? "ring-1 ring-offset-1 ring-primary/20"
+                      : "grayscale"
+                  )}
+                  style={selectedIds.includes(item.id) ? {
+                    backgroundColor: getColorVar(item.color),
+                    borderColor: getColorVar(item.color),
+                    color: 'white'
+                  } : {}}
+                >
+                  {item.name}
+                  <span className="ml-1.5 text-[10px] opacity-60">(Archived)</span>
+                </Button>
+              ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* CHART SECTION */}
-      <div className="bg-card p-6 rounded-xl border shadow-sm">
-        <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-          Productivity Trends
-          {loading && <span className="text-xs font-normal text-muted-foreground animate-pulse ml-2">Loading data...</span>}
-        </h3>
+      <div className={containerClass}>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            Productivity Trends
+            {loading && <span className="text-xs font-normal text-muted-foreground animate-pulse ml-2">Loading data...</span>}
+          </h3>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsMaximized(!isMaximized)}
+            className="hover:bg-muted"
+            title={isMaximized ? "Minimize" : "Maximize"}
+          >
+            {isMaximized ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+          </Button>
+        </div>
 
         {/* Scrollable Container Wrapper */}
         <div
           ref={scrollContainerRef}
-          className="w-full relative overflow-y-auto border-b border-border/50"
-          style={{ maxHeight: `${MAX_VIEW_HEIGHT}px` }} // Show approx 12h vertical
+          className="w-full relative overflow-y-auto border-b border-border/50 flex-1"
+          style={{ maxHeight: containerHeight }}
         >
-          <div className="w-full overflow-x-auto pb-4">
+          <div className="w-full overflow-x-auto pb-4 h-full">
             <div style={{ minWidth: `${minWidth}px`, height: `${TOTAL_HEIGHT}px` }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
@@ -556,6 +625,20 @@ const AnalyticsChart = () => {
                   margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                   barGap={2}
                 >
+                  <defs>
+                    {/* Define gradients for each visible key */}
+                    {renderedKeys.map((item) => {
+                      const color = getColorVar(item.color);
+                      const gradId = `gradient-${item.id}`;
+                      return (
+                        <linearGradient key={gradId} id={gradId} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={color} stopOpacity={0.8} />
+                          <stop offset="95%" stopColor={color} stopOpacity={0} />
+                        </linearGradient>
+                      );
+                    })}
+                  </defs>
+
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
                   <XAxis
                     dataKey="date"
@@ -585,8 +668,8 @@ const AnalyticsChart = () => {
                     filterNull={true}
                   />
 
-                  {/* Dynamic Bars based on selection - Stacked */}
-                  {renderedKeys.map((item) => (
+                  {/* Rendering based on chartType */}
+                  {chartType === 'bar' && renderedKeys.map((item) => (
                     <Bar
                       key={item.id}
                       dataKey={item.name}
@@ -599,31 +682,62 @@ const AnalyticsChart = () => {
                     />
                   ))}
 
-                  {/* Invisible Line for Total labels */}
-                  <Line
-                    type="monotone"
-                    dataKey="_totalDuration"
-                    stroke="none"
-                    dot={false}
-                    isAnimationActive={true}
-                    animationDuration={500}
-                    legendType="none"
-                  >
-                    <LabelList
-                      dataKey="_totalDuration"
-                      position="top"
-                      content={(props: any) => {
-                        const { x, y, value } = props;
-                        if (!value || value === 0) return null;
-                        const pct = Math.round((value / 24) * 100);
-                        return (
-                          <text x={x} y={y - 10} fill="hsl(var(--foreground))" textAnchor="middle" fontSize={13} fontWeight={500}>
-                            {formatYAxis(value)} ({pct}%)
-                          </text>
-                        );
-                      }}
+                  {chartType === 'area' && renderedKeys.map((item) => (
+                    <Area
+                      key={item.id}
+                      type="monotone"
+                      dataKey={item.name}
+                      stackId="a"
+                      fill={`url(#gradient-${item.id})`}
+                      stroke={getColorVar(item.color)}
+                      fillOpacity={1}
+                      name={item.name}
+                      animationDuration={500}
                     />
-                  </Line>
+                  ))}
+
+                  {chartType === 'line' && renderedKeys.map((item) => (
+                    <Line
+                      key={item.id}
+                      type="monotone"
+                      dataKey={item.name}
+                      stroke={getColorVar(item.color)}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 1 }}
+                      activeDot={{ r: 5 }}
+                      name={item.name}
+                      animationDuration={500}
+                    />
+                  ))}
+
+
+                  {/* Invisible Line for Total labels (Only for Stacked Charts) */}
+                  {(chartType === 'bar' || chartType === 'area') && (
+                    <Line
+                      type="monotone"
+                      dataKey="_totalDuration"
+                      stroke="none"
+                      dot={false}
+                      isAnimationActive={true}
+                      animationDuration={500}
+                      legendType="none"
+                    >
+                      <LabelList
+                        dataKey="_totalDuration"
+                        position="top"
+                        content={(props: any) => {
+                          const { x, y, value } = props;
+                          if (!value || value === 0) return null;
+                          const pct = Math.round((value / 24) * 100);
+                          return (
+                            <text x={x} y={y - 10} fill="hsl(var(--foreground))" textAnchor="middle" fontSize={13} fontWeight={500}>
+                              {formatYAxis(value)} ({pct}%)
+                            </text>
+                          );
+                        }}
+                      />
+                    </Line>
+                  )}
 
                   {/* Render Goals */}
                   {goals
@@ -660,7 +774,10 @@ const AnalyticsChart = () => {
           {renderedKeys.map((item) => (
             <div key={item.id} className="flex items-center gap-2">
               <div
-                className="w-3 h-3 rounded-full transition-colors duration-300"
+                className={cn(
+                  "rounded-full transition-colors duration-300",
+                  chartType === 'line' ? "w-4 h-1 rounded-sm" : "w-3 h-3"
+                )}
                 style={{
                   // Check if ANY item with this name is selected (since this is the Legend from unique keys)
                   backgroundColor: selectedNames.has(item.name) ? getColorVar(item.color) : 'hsl(var(--muted))'
