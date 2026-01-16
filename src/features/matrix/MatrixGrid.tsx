@@ -35,13 +35,13 @@ const MatrixGrid: React.FC<MatrixGridProps> = ({ profileId, range, data, onToggl
                 <div className="flex w-max space-x-0">
 
                     {/* Sticky Column: Task Names */}
-                    <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
-                        <div className="h-10 border-b bg-muted/50 flex items-center px-4 font-semibold text-xs text-muted-foreground">
+                    <div className="sticky left-0 z-20 bg-background border-r shadow-sm w-[140px] md:min-w-[200px] md:w-auto flex-shrink-0">
+                        <div className="h-10 border-b bg-muted/50 flex items-center px-4 font-semibold text-xs text-muted-foreground truncate">
                             Task / Habit
                         </div>
                         {data.items.map((item) => (
-                            <div key={item.id} className="h-12 border-b flex items-center px-4 min-w-[200px] whitespace-nowrap text-sm font-medium hover:bg-muted/50 transition-colors">
-                                <span title={item.template?.name}>
+                            <div key={item.id} className="h-12 border-b flex items-center px-4 whitespace-nowrap text-sm font-medium hover:bg-muted/50 transition-colors w-full">
+                                <span title={item.template?.name} className="truncate w-full block">
                                     {item.template?.name || "Unknown"}
                                 </span>
                             </div>

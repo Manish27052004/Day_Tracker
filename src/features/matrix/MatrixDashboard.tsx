@@ -151,22 +151,28 @@ const MatrixDashboard = () => {
                     <h1 className="text-3xl font-bold tracking-tight">Habit Matrix</h1>
                     <p className="text-muted-foreground">Track your consistency across profiles.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
                     {selectedProfileId && (
-                        <AddHabitDialog
-                            profileId={selectedProfileId}
-                            existingTemplateIds={data?.items?.map((item: any) => item.template_id) || []}
-                            onHabitAdded={() => queryClient.invalidateQueries({ queryKey: ['matrixData'] })}
-                        />
+                        <div className="w-full sm:w-auto">
+                            <AddHabitDialog
+                                profileId={selectedProfileId}
+                                existingTemplateIds={data?.items?.map((item: any) => item.template_id) || []}
+                                onHabitAdded={() => queryClient.invalidateQueries({ queryKey: ['matrixData'] })}
+                            />
+                        </div>
                     )}
-                    <ProfileSelector
-                        selectedProfileId={selectedProfileId}
-                        onSelect={setSelectedProfileId}
-                    />
-                    <DateFilter
-                        range={dateRange}
-                        onChange={setDateRange}
-                    />
+                    <div className="flex-1 sm:flex-none">
+                        <ProfileSelector
+                            selectedProfileId={selectedProfileId}
+                            onSelect={setSelectedProfileId}
+                        />
+                    </div>
+                    <div className="flex-1 sm:flex-none">
+                        <DateFilter
+                            range={dateRange}
+                            onChange={setDateRange}
+                        />
+                    </div>
                 </div>
             </div>
 
