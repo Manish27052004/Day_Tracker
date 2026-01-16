@@ -13,6 +13,13 @@ import DateFilter from './DateFilter';
 import AnalyticsChart from './AnalyticsChart';
 import AddHabitDialog from './AddHabitDialog';
 
+import MobileHabitView from './MobileHabitView';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown, Calendar, LayoutGrid, List } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from "@/lib/utils";
+
 const MatrixDashboard = () => {
     // Shared State
     const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
@@ -34,6 +41,18 @@ const MatrixDashboard = () => {
             to: new Date()
         };
     });
+
+    // Mobile Features
+    const isMobile = useIsMobile();
+    const [isChartViewOpen, setIsChartViewOpen] = useState(!isMobile); // Default closed on mobile
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>(isMobile ? 'list' : 'grid');
+
+    // Sync view mode if device changes
+    React.useEffect(() => {
+        if (isMobile) setViewMode('list');
+        else setViewMode('grid');
+    }, [isMobile]);
+
 
     // Persist date range
     React.useEffect(() => {
@@ -144,13 +163,27 @@ const MatrixDashboard = () => {
     }, [data, dateRange]);
 
     return (
-        <div className="container mx-auto p-4 space-y-6 animate-in fade-in duration-500">
+        <div className="container mx-auto p-4 space-y-4 md:space-y-6 animate-in fade-in duration-500 pb-24 md:pb-4">
             {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Habit Matrix</h1>
-                    <p className="text-muted-foreground">Track your consistency across profiles.</p>
+                <div className="flex justify-between w-full md:w-auto items-center">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Habit Matrix</h1>
+                        <p className="text-xs md:text-sm text-muted-foreground">Track your consistency.</p>
+                    </div>
+                    {/* Mobile View Toggle */}
+                    {isMobile && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setViewMode(prev => prev === 'list' ? 'grid' : 'list')}
+                        >
+                            {viewMode === 'list' ? <LayoutGrid className="w-4 h-4 mr-2" /> : <List className="w-4 h-4 mr-2" />}
+                            {viewMode === 'list' ? 'Grid' : 'List'}
+                        </Button>
+                    )}
                 </div>
+
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
                     {selectedProfileId && (
                         <div className="w-full sm:w-auto">
@@ -176,36 +209,58 @@ const MatrixDashboard = () => {
                 </div>
             </div>
 
-            <Separator />
+            <Separator className="hidden md:block" />
 
-            {/* Analytics Section */}
+            {/* Analytics Section - Collapsible on Mobile */}
             <div className="grid gap-4 md:grid-cols-1">
-                <Card className="bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                    <CardHeader>
-                        <CardTitle className="text-sm font-medium">Completion Trend</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <AnalyticsChart
+                <Collapsible open={isChartViewOpen} onOpenChange={setIsChartViewOpen}>
+                    <div className="flex items-center justify-between md:hidden mb-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Analytics</h3>
+                        <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <ChevronDown className={cn("h-4 w-4 transition-transform", isChartViewOpen ? "rotate-180" : "")} />
+                            </Button>
+                        </CollapsibleTrigger>
+                    </div>
+                    <CollapsibleContent forceMount className={cn("space-y-2", isChartViewOpen ? "block" : "hidden md:block")}>
+                        <Card className="bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                            <CardHeader className="py-4 md:py-6">
+                                <CardTitle className="text-sm font-medium">Completion Trend</CardTitle>
+                            </CardHeader>
+                            <CardContent className="py-2 md:py-6">
+                                <AnalyticsChart
+                                    profileId={selectedProfileId}
+                                    range={dateRange}
+                                    totalTasks={data?.items.length || 0}
+                                    data={chartData}
+                                />
+                            </CardContent>
+                        </Card>
+                    </CollapsibleContent>
+                </Collapsible>
+            </div>
+
+            {/* Main Content Area: Switch between List (Mobile) and Grid (Desktop/Toggle) */}
+            {viewMode === 'list' ? (
+                /* Mobile List View */
+                <MobileHabitView
+                    data={data}
+                    range={dateRange}
+                    onToggle={handleToggle}
+                />
+            ) : (
+                /* Classic Grid View */
+                <Card className="overflow-hidden border-none shadow-md">
+                    <CardContent className="p-0">
+                        <MatrixGrid
                             profileId={selectedProfileId}
                             range={dateRange}
-                            totalTasks={data?.items.length || 0}
-                            data={chartData}
+                            data={data}
+                            onToggle={handleToggle}
                         />
                     </CardContent>
                 </Card>
-            </div>
-
-            {/* Matrix Grid Section */}
-            <Card className="overflow-hidden border-none shadow-md">
-                <CardContent className="p-0">
-                    <MatrixGrid
-                        profileId={selectedProfileId}
-                        range={dateRange}
-                        data={data}
-                        onToggle={handleToggle}
-                    />
-                </CardContent>
-            </Card>
+            )}
         </div>
     );
 };
