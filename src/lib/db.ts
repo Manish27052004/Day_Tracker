@@ -29,6 +29,7 @@ export interface Session {
   startTime: string; // HH:mm format
   endTime: string;
   description: string;
+  richContent?: string; // JSON string for rich text editor content
   createdAt: Date;
   syncStatus: 'pending' | 'synced' | 'error';
   userId?: string;
@@ -51,12 +52,12 @@ export interface RepeatingTask {
   targetTime: number;
   category?: string;
   description: string;
+  richContent?: string; // JSON string for rich text editor content (SOPs, etc)
 
   // Repeat configuration
   repeatPattern: 'daily' | 'weekly' | 'custom';
   repeatDays?: number[]; // 0=Sunday, 1=Monday, ..., 6=Saturday (for weekly/custom)
   addAtTime?: string; // HH:mm format - optional time when task should be added
-
 
   categoryType?: 'work' | 'life';
   color?: string;
@@ -139,8 +140,8 @@ const db = new Dexie('DailyTrackerDB') as Dexie & {
 
 // ... (previous versions)
 
-// Version 14: Attendance Manager
-db.version(14).stores({
+// Version 15: Rich Content
+db.version(15).stores({
   tasks: '++id, date, status, priority, createdAt, syncStatus, userId',
   sessions: '++id, date, taskId, category, categoryType, startTime, syncStatus, userId',
   sleepEntries: '++id, date, syncStatus, userId',
@@ -151,8 +152,8 @@ db.version(14).stores({
   subjects: '++id, name, status, syncStatus, userId',
   attendanceRecords: '++id, subjectId, date, status, syncStatus, userId'
 }).upgrade(async tx => {
-  console.log('📚 Attendance Manager Migration: Creating new tables...');
-  // No data migration needed for new tables
+  console.log('✨ Rich Content Manager Migration: Updating schema...');
+  // No data migration needed, fields will just be undefined initially
 });
 
 export { db };

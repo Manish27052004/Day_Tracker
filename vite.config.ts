@@ -20,39 +20,39 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    VitePWA({
-      strategies: 'injectManifest',
-      srcDir: 'src',
-      filename: 'sw.ts',
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg', 'logo.png'],
-      manifest: {
-        name: 'Daily Tracker - Productivity Companion',
-        short_name: 'Daily Tracker',
-        description: 'An offline-first daily tracker with Notion-like aesthetics.',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
-        display: 'standalone',
-        start_url: '/',
-        icons: [
-          {
-            src: 'logo.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: 'logo.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
-      },
-      injectManifest: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
-      }
-    })
+    // VitePWA({
+    //   strategies: 'injectManifest',
+    //   srcDir: 'src',
+    //   filename: 'sw.ts',
+    //   registerType: 'autoUpdate',
+    //   includeAssets: [],
+    //   manifest: {
+    //     name: 'Daily Tracker - Productivity Companion',
+    //     short_name: 'Daily Tracker',
+    //     description: 'An offline-first daily tracker with Notion-like aesthetics.',
+    //     theme_color: '#ffffff',
+    //     background_color: '#ffffff',
+    //     display: 'standalone',
+    //     start_url: '/',
+    //     icons: [
+    //       {
+    //         src: 'logo.png',
+    //         sizes: '192x192',
+    //         type: 'image/png',
+    //         purpose: 'any maskable'
+    //       },
+    //       {
+    //         src: 'logo.png',
+    //         sizes: '512x512',
+    //         type: 'image/png',
+    //         purpose: 'any maskable'
+    //       }
+    //     ]
+    //   },
+    //   injectManifest: {
+    //     globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+    //   }
+    // })
   ].filter(Boolean),
   resolve: {
     alias: {

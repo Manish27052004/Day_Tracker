@@ -1,0 +1,9 @@
+[0m[0m
+[0m[4mD:\1_web_pproject\TIme Tracker\src\components\Timeline\RichEditor.tsx[24m[0m
+[0m  [2m50:29[22m  [31merror[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[4mD:\1_web_pproject\TIme Tracker\src\contexts\AuthContext.tsx[24m[0m
+[0m  [2m24:14[22m  [33mwarning[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m[0m
+[0m[31m[1m✖ 2 problems (1 error, 1 warning)[22m[39m[0m
+[0m[31m[1m[22m[39m[0m

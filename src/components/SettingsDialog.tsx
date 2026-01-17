@@ -28,11 +28,12 @@ import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectItem, SelectTrigger, SelectValue, SelectContent } from "@/components/ui/select";
 import { ModeToggle } from "@/components/mode-toggle";
+import { StorageSettings } from "@/components/settings/StorageSettings";
 
 export interface SettingsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    defaultTab?: 'priorities' | 'categories' | 'types';
+    defaultTab?: 'priorities' | 'categories' | 'types' | 'storage';
 }
 
 export interface CategoryType {
@@ -353,7 +354,13 @@ export const SettingsDialog = ({ open, onOpenChange, defaultTab = 'priorities' }
                 <TabsTrigger value="priorities">Priorities</TabsTrigger>
                 <TabsTrigger value="categories">Groups</TabsTrigger>
                 <TabsTrigger value="execution">Activities</TabsTrigger>
+                <TabsTrigger value="storage">Storage</TabsTrigger>
             </TabsList>
+
+            {/* 4. STORAGE TAB */}
+            <TabsContent value="storage" className="space-y-4 py-1">
+                <StorageSettings />
+            </TabsContent>
 
             {/* 1. PLANNING PRIORITIES TAB */}
             <TabsContent value="priorities" className="space-y-4 py-1">

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,7 +7,11 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { generateChartData, formatMinutesToHours, type ViewMode, type LogEntry } from '@/utils/chartLogic';
 import { cn } from '@/lib/utils';
-import { getDateString } from '@/lib/db';
+import { getDateString, Session, Task, Category } from '@/lib/db';
+import { TimelineView, TimelineSession } from './Timeline/TimelineView';
+import { LayoutList, PieChart as PieChartIcon, Mail } from 'lucide-react';
+import { gmailService } from '@/services/gmailService';
+import { toast } from 'sonner';
 
 interface DailyBreakdownProps {
     selectedDate: Date;
@@ -36,6 +40,7 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
         return (localStorage.getItem('daily_breakdown_view_mode') as ViewMode) || 'CATEGORY';
     });
+    const [showTimeline, setShowTimeline] = useState(false);
 
     // Persist viewMode
     useEffect(() => {
@@ -43,10 +48,10 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
     }, [viewMode]);
 
     // Cloud Data State
-    const [sessions, setSessions] = useState<any[]>([]);
-    const [tasks, setTasks] = useState<any[]>([]);
-    const [categories, setCategories] = useState<any[]>([]);
-    const [categoryTypes, setCategoryTypes] = useState<any[]>([]); // Added for main types colors
+    const [sessions, setSessions] = useState<Session[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [categoryTypes, setCategoryTypes] = useState<any[]>([]); // Keep generic for joined/custom table
     const [loading, setLoading] = useState(true);
 
     const dateString = getDateString(selectedDate);
@@ -87,20 +92,32 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                 if (sessionsData) {
                     setSessions(sessionsData.map(s => ({
                         id: s.id,
+                        date: s.date,
                         taskId: s.task_id,
                         customName: s.custom_name,
                         category: s.category,
+                        categoryType: s.category_type,
                         startTime: s.start_time,
-                        endTime: s.end_time
+                        endTime: s.end_time,
+                        description: s.description,
+                        richContent: s.rich_content,
+                        createdAt: new Date(s.created_at),
+                        syncStatus: 'synced',
+                        userId: s.user_id
                     })));
                 } else {
                     setSessions([]);
                 }
 
-                if (tasksData) setTasks(tasksData);
+                if (tasksData) setTasks(tasksData.map(t => ({
+                    ...t,
+                    targetTime: t.target_time,
+                    createdAt: new Date(t.created_at),
+                    updatedAt: new Date(t.updated_at)
+                })) as Task[]);
                 else setTasks([]);
 
-                if (categoriesData) setCategories(categoriesData);
+                if (categoriesData) setCategories(categoriesData as Category[]);
                 else setCategories([]);
 
                 if (typesData) setCategoryTypes(typesData);
@@ -188,7 +205,23 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
         return map;
     }, [tasks]);
 
-    // Transform sessions to LogEntry format
+    // Transform sessions for Timeline
+    const timelineSessions: TimelineSession[] = useMemo(() => {
+        return sessions.map(s => ({
+            id: s.id!,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            category: s.category || 'Uncategorized',
+            customName: s.customName,
+            taskId: s.taskId || undefined,
+            taskName: s.taskId ? taskNameMap.get(s.taskId) : undefined,
+            richContent: s.richContent,
+            color: (s.category && categoryColors[s.category]) ? categoryColors[s.category] : (categoryColors['Uncategorized'] || '#9ca3af')
+        }));
+    }, [sessions, taskNameMap, categoryColors]);
+
+
+    // Transform sessions to LogEntry format for Chart
     const logs: LogEntry[] = useMemo(() => {
         if (!sessions || sessions.length === 0) return [];
 
@@ -212,7 +245,7 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                 endTime: session.endTime,
                 category: session.category || 'Uncategorized',
                 customName: sessionName,
-                taskId: session.taskId,
+                taskId: session.taskId || null,
             };
         });
     }, [sessions, taskNameMap]);
@@ -256,6 +289,23 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
             .filter((slice) => slice.name !== 'Untracked')
             .reduce((sum, slice) => sum + slice.value, 0);
     }, [chartData]);
+
+    const handleUpdateRichContent = async (id: number, content: string) => {
+        // Optimistic update
+        setSessions(prev => prev.map(s => s.id === id ? { ...s, richContent: content } : s));
+
+        // DB Update
+        const { error } = await supabase
+            .from('sessions')
+            .update({ rich_content: content })
+            .eq('id', id);
+
+        if (error) {
+            console.error("Failed to save rich content:", error);
+            // Revert? (Not implemented for simplicity, relying on user retry or eventual consistency)
+        }
+    };
+
 
     // Custom tooltip
     const CustomTooltip = ({ active, payload }: any) => {
@@ -304,6 +354,28 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
 
     const hasData = chartData.length > 0;
 
+    const handleSendEmail = async () => {
+        if (!user?.email) {
+            toast.error("User email not found.");
+            return;
+        }
+
+        const toastId = toast.loading("Generating and sending report...");
+        try {
+            await gmailService.generateAndSendDailyReport(selectedDate, user.email);
+            toast.success("Daily report sent to your Gmail!", { id: toastId });
+        } catch (error: unknown) {
+            console.error("Email failed:", error);
+            // Check if it's likely a scope issue
+            const errString = String(error);
+            if (errString.includes("403") || errString.includes("scope")) {
+                toast.error("Permission denied. Please Sign Out and Sign In again to grant Gmail permissions.", { id: toastId, duration: 5000 });
+            } else {
+                toast.error("Failed to send email.", { id: toastId });
+            }
+        }
+    };
+
     if (loading && !sessions.length) {
         return (
             <div className="flex items-center justify-center p-8">
@@ -328,99 +400,164 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                     </p>
                 </div>
 
-                {/* View Mode Toggle - Segmented Control */}
-                <div className="bg-muted/50 p-1 rounded-lg flex items-center gap-1 w-full md:w-auto">
-                    {(['SESSION', 'CATEGORY', 'SUBCATEGORY'] as ViewMode[]).map((mode) => (
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    {/* Actions */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={handleSendEmail}
+                        title="Send Daily Report to Gmail"
+                    >
+                        <Mail className="w-4 h-4" />
+                        <span className="hidden sm:inline">Email Report</span>
+                    </Button>
+
+                    {/* View Switcher: Chart vs Timeline */}
+                    <div className="bg-muted/50 p-1 rounded-lg flex items-center gap-1">
                         <button
-                            key={mode}
-                            onClick={() => setViewMode(mode)}
+                            onClick={() => setShowTimeline(false)}
                             className={cn(
-                                "flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200",
-                                viewMode === mode
-                                    ? "bg-background text-foreground shadow-sm scale-[1.02]"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                "p-2 rounded-md transition-all",
+                                !showTimeline ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
                             )}
+                            title="Chart View"
                         >
-                            {mode.charAt(0) + mode.slice(1).toLowerCase()}
+                            <PieChartIcon className="w-4 h-4" />
                         </button>
-                    ))}
+                        <button
+                            onClick={() => setShowTimeline(true)}
+                            className={cn(
+                                "p-2 rounded-md transition-all",
+                                showTimeline ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+                            )}
+                            title="Timeline View"
+                        >
+                            <LayoutList className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {!showTimeline && (
+                        /* View Mode Toggle - Segmented Control (Only for Chart) */
+                        <div className="bg-muted/50 p-1 rounded-lg flex items-center gap-1 flex-1 md:flex-none overflow-x-auto">
+                            {(['SESSION', 'CATEGORY', 'SUBCATEGORY'] as ViewMode[]).map((mode) => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setViewMode(mode)}
+                                    className={cn(
+                                        "flex-1 md:flex-none px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap",
+                                        viewMode === mode
+                                            ? "bg-background text-foreground shadow-sm scale-[1.02]"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                    )}
+                                >
+                                    {mode.charAt(0) + mode.slice(1).toLowerCase()}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* Chart Card */}
-            <Card className="p-8 border-border/50 shadow-sm bg-card/50 backdrop-blur-sm">
-                {!hasData || totalTrackedMinutes === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-                        <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
-                            <svg className="w-8 h-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                            </svg>
-                        </div>
-                        <p className="text-lg font-medium mb-1">No data available</p>
-                        <p className="text-sm opacity-70">Add sessions in Execution to see breakdown</p>
-                    </div>
-                ) : (
-                    <div className="grid lg:grid-cols-2 gap-8 items-center">
-                        <div className="h-[400px] relative">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={chartData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={100}
-                                        outerRadius={160}
-                                        paddingAngle={3}
-                                        cornerRadius={4}
-                                        dataKey="value"
-                                        label={renderCenterLabel}
-                                        stroke="none"
-                                    >
-                                        {chartData.map((entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={entry.fill}
-                                                className="transition-opacity duration-200 hover:opacity-80"
-                                            />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip content={<CustomTooltip />} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-
-                        {/* Custom Legend */}
-                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                            <h3 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">Breakdown Details</h3>
-                            {chartData.map((entry, index) => (
-                                <motion.div
-                                    key={entry.name}
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: index * 0.05 }}
-                                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors border border-transparent hover:border-border/50"
-                                >
-                                    <div
-                                        className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm"
-                                        style={{ backgroundColor: entry.fill }}
-                                    />
-                                    <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
-                                        <p className="text-sm font-medium truncate">{entry.name}</p>
-                                        <div className="text-right">
-                                            <p className="text-sm font-semibold tabular-nums">
-                                                {formatMinutesToHours(entry.value)}
-                                            </p>
-                                            <p className="text-[10px] text-muted-foreground">
-                                                {Math.round((entry.value / (24 * 60)) * 100)}% of day
-                                            </p>
-                                        </div>
+            {/* Content Area */}
+            <Card className="p-8 border-border/50 shadow-sm bg-card/50 backdrop-blur-sm relative min-h-[400px]">
+                <AnimatePresence mode="wait">
+                    {showTimeline ? (
+                        <motion.div
+                            key="timeline"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            <TimelineView
+                                sessions={timelineSessions}
+                                onUpdateSession={handleUpdateRichContent}
+                            />
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="chart"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 20 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            {!hasData || totalTrackedMinutes === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                                    <div className="w-16 h-16 rounded-full bg-muted/30 flex items-center justify-center mb-4">
+                                        <svg className="w-8 h-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                                        </svg>
                                     </div>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                                    <p className="text-lg font-medium mb-1">No data available</p>
+                                    <p className="text-sm opacity-70">Add sessions in Execution to see breakdown</p>
+                                </div>
+                            ) : (
+                                <div className="grid lg:grid-cols-2 gap-8 items-center">
+                                    <div className="h-[400px] relative">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={chartData}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={100}
+                                                    outerRadius={160}
+                                                    paddingAngle={3}
+                                                    cornerRadius={4}
+                                                    dataKey="value"
+                                                    label={renderCenterLabel}
+                                                    stroke="none"
+                                                >
+                                                    {chartData.map((entry, index) => (
+                                                        <Cell
+                                                            key={`cell-${index}`}
+                                                            fill={entry.fill}
+                                                            className="transition-opacity duration-200 hover:opacity-80"
+                                                        />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip content={<CustomTooltip />} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+
+                                    {/* Custom Legend */}
+                                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                        <h3 className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-wider">Breakdown Details</h3>
+                                        {chartData.map((entry, index) => (
+                                            <motion.div
+                                                key={entry.name}
+                                                initial={{ opacity: 0, x: 20 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: index * 0.05 }}
+                                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors border border-transparent hover:border-border/50"
+                                            >
+                                                <div
+                                                    className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm"
+                                                    style={{ backgroundColor: entry.fill }}
+                                                />
+                                                <div className="flex-1 min-w-0 flex items-center justify-between gap-4">
+                                                    <p className="text-sm font-medium truncate">{entry.name}</p>
+                                                    <div className="text-right">
+                                                        <p className="text-sm font-semibold tabular-nums">
+                                                            {formatMinutesToHours(entry.value)}
+                                                        </p>
+                                                        <p className="text-[10px] text-muted-foreground">
+                                                            {Math.round((entry.value / (24 * 60)) * 100)}% of day
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </Card>
         </motion.div>
     );
