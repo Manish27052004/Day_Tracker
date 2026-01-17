@@ -27,25 +27,17 @@ import { useIsMobile } from '@/hooks/use-mobile';
 const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'tracker' | 'attendance'>('tracker');
   const { dayStartHour, setDayStartHour } = useUserPreferences();
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Determine mode based on URL or local storage
-  useEffect(() => {
-    if (location.pathname.includes('/attendance')) {
-      setMode('attendance');
-    } else if (location.pathname.includes('/tracker') || location.pathname === '/') {
-      setMode('tracker');
-    }
-  }, [location]);
+  // Mode effects removed
 
+  // Fixed Links
   const links = [
-    { to: mode === 'attendance' ? '/attendance' : '/tracker', label: 'Home', icon: LayoutDashboard },
-    { to: mode === 'attendance' ? '/attendance/analytics' : '/tracker/analytics', label: 'Analytics', icon: BarChart3 },
-    // Only show Matrix for tracker mode for now
-    ...(mode === 'tracker' ? [{ to: '/tracker/matrix', label: 'Habit Matrix', icon: Grid3X3 }] : []),
+    { to: '/tracker', label: 'Home', icon: LayoutDashboard },
+    { to: '/tracker/analytics', label: 'Analytics', icon: BarChart3 },
+    { to: '/tracker/matrix', label: 'Habit Matrix', icon: Grid3X3 },
   ];
 
   return (
@@ -100,28 +92,20 @@ const Header = () => {
 
                     <div className="flex flex-col gap-2">
                       <p className="text-sm font-medium text-muted-foreground px-2">Settings</p>
-                      {mode === 'tracker' && (
-                        <div className="flex items-center justify-between px-2 py-1">
-                          <span className="text-sm">Day Start Hour</span>
-                          <select
-                            className="bg-background border border-border rounded text-xs px-2 py-1"
-                            value={dayStartHour}
-                            onChange={(e) => setDayStartHour(Number(e.target.value))}
-                          >
-                            {Array.from({ length: 24 }, (_, i) => (
-                              <option key={i} value={i}>
-                                {i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      <Link to="/select-mode" onClick={() => setMobileOpen(false)}>
-                        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-2">
-                          <LayoutDashboard className="h-4 w-4" />
-                          Change Workspace
-                        </Button>
-                      </Link>
+                      <div className="flex items-center justify-between px-2 py-1">
+                        <span className="text-sm">Day Start Hour</span>
+                        <select
+                          className="bg-background border border-border rounded text-xs px-2 py-1"
+                          value={dayStartHour}
+                          onChange={(e) => setDayStartHour(Number(e.target.value))}
+                        >
+                          {Array.from({ length: 24 }, (_, i) => (
+                            <option key={i} value={i}>
+                              {i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </SheetContent>
@@ -130,11 +114,11 @@ const Header = () => {
 
             {/* App Title */}
             <h1 className="text-lg font-semibold text-foreground">
-              {mode === 'tracker' ? 'Daily Tracker' : 'Attendance Manager'}
+              Daily Tracker
             </h1>
 
             {/* Desktop: Day Start Selector */}
-            {!isMobile && mode === 'tracker' && (
+            {!isMobile && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground hidden sm:block">Start:</span>
                 <select
@@ -149,20 +133,6 @@ const Header = () => {
                   ))}
                 </select>
               </div>
-            )}
-
-            {/* Desktop: Change Workspace Button */}
-            {!isMobile && (
-              <Link to="/select-mode">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 hidden sm:flex border-primary/20 hover:border-primary/50 hover:bg-primary/5"
-                >
-                  <LayoutDashboard className="h-4 w-4" />
-                  <span>Change Workspace</span>
-                </Button>
-              </Link>
             )}
           </div>
 

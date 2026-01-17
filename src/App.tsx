@@ -17,8 +17,7 @@ import NotFound from "./pages/NotFound";
 import DebugPage from "./DebugPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import ModeSelection from "./pages/ModeSelection";
-import Attendance from "./pages/Attendance";
+// ModeSelection and Attendance removed for simplicity
 import MainLayout from "./layouts/MainLayout";
 import MatrixDashboard from "@/features/matrix/MatrixDashboard";
 
@@ -66,11 +65,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const RootRedirect = () => {
-  const mode = localStorage.getItem('selected_mode');
-  if (mode === 'all') return <Navigate to="/all/tracker" replace />;
-  if (mode === 'tracker') return <Navigate to="/tracker" replace />;
-  if (mode === 'attendance') return <Navigate to="/attendance" replace />;
-  return <Navigate to="/select-mode" replace />;
+  return <Navigate to="/tracker" replace />;
 };
 
 const App = () => {
@@ -103,33 +98,15 @@ const App = () => {
                         }
                       />
 
-                      <Route
-                        path="/select-mode"
-                        element={
-                          <ProtectedRoute>
-                            <ModeSelection />
-                          </ProtectedRoute>
-                        }
-                      />
 
-                      {/* Layout Routes (Tracker, Attendance, All) */}
+
+                      {/* Layout Routes (Tracker Only) */}
                       <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-                        {/* Single App Views */}
                         <Route path="/tracker" element={<Index />} />
                         <Route path="/tracker/matrix" element={<MatrixDashboard />} />
                         <Route path="/tracker/analytics" element={<Analytics />} />
-                        <Route path="/attendance" element={<Attendance />} />
 
-                        {/* 'All' Mode Views */}
-                        <Route path="/all">
-                          <Route path="tracker" element={<Index />} />
-                          <Route path="tracker/matrix" element={<MatrixDashboard />} />
-                          <Route path="tracker/analytics" element={<Analytics />} />
-                          <Route path="attendance" element={<Attendance />} />
-                          <Route index element={<Navigate to="tracker" replace />} />
-                        </Route>
-
-                        {/* Fallback for legacy analytics link if any */}
+                        {/* Fallback for legacy analytics link */}
                         <Route path="/analytics" element={<Navigate to="/tracker/analytics" replace />} />
                       </Route>
 
