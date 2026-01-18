@@ -748,8 +748,8 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
                           value={task.description}
                           onChange={(value) => updateTask(task.id!, { description: value })}
                           placeholder="Description..."
-                          className="ghost-input min-h-[32px] text-sm resize-none"
-                          rows={1}
+                          className="ghost-input min-h-[80px] text-sm resize-none"
+                          rows={3}
                         />
                       </td>
 
