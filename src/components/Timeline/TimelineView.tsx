@@ -1,11 +1,10 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { RichEditor } from './RichEditor';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Maximize2, Minimize2, Edit2, Check, Moon, AlertCircle, Info } from 'lucide-react';
+import { Maximize2, Minimize2, Edit2, Check, Moon, AlertCircle, Info, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { TimelineSlice } from '@/utils/chartLogic';
 import { differenceInMinutes } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -24,9 +23,14 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     const [expandedSliceIndex, setExpandedSliceIndex] = useState<number | null>(null);
     const [editingSliceIndex, setEditingSliceIndex] = useState<number | null>(null);
 
+    // Zoom State: 1 = 100% width, 2 = 200%, etc.
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
     // Timeline Configuration
     const TOTAL_MINUTES = 24 * 60; // 1440 minutes
     const START_HOUR = 0; // 00:00
+    const MIN_WIDTH_PX = 1000; // Base width at 1x zoom (ensures roughly 0.7px per minute)
 
     // Helper: Convert Date to minutes from start of day (00:00)
     const getMinutesFromStart = (date: Date) => {
@@ -75,73 +79,108 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
+    const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 4)); // Max 4x
+    const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1)); // Min 1x
+    const handleResetZoom = () => setZoomLevel(1);
+
     return (
-        <div className={cn("space-y-6 select-none", classNames)}>
+        <div className={cn("space-y-4 select-none", classNames)}>
 
-            {/* Main Horizontal Timeline Container */}
-            <div className="relative h-32 w-full bg-muted/20 rounded-xl border border-border/50 overflow-hidden shadow-inner">
-
-                {/* 1. Grid Lines & Hour Labels */}
-                <div className="absolute inset-0 flex pointer-events-none">
-                    {hours.map((hour) => (
-                        <div key={hour} className="flex-1 border-r border-border/10 relative h-full">
-                            <span className="absolute bottom-1 left-1 text-[10px] text-muted-foreground/50 font-mono">
-                                {hour}:00
-                            </span>
-                        </div>
-                    ))}
+            {/* Toolbar */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={handleZoomOut} disabled={zoomLevel <= 1} title="Zoom Out">
+                        <ZoomOut className="w-4 h-4" />
+                    </Button>
+                    <span className="text-xs font-mono w-12 text-center">{Math.round(zoomLevel * 100)}%</span>
+                    <Button variant="outline" size="sm" onClick={handleZoomIn} disabled={zoomLevel >= 4} title="Zoom In">
+                        <ZoomIn className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleResetZoom} disabled={zoomLevel === 1} title="Reset Zoom">
+                        <RotateCcw className="w-3 h-3" />
+                    </Button>
                 </div>
+                <div className="text-xs text-muted-foreground">
+                    Scroll horizontally to view details
+                </div>
+            </div>
 
-                {/* 2. Timeline Bars */}
-                <div className="absolute top-2 bottom-6 left-0 right-0">
-                    <TooltipProvider>
-                        {slices.map((slice, index) => {
-                            const isSelected = expandedSliceIndex === index;
-                            const style = getPositionStyle(slice.start, slice.end);
-                            const isUntracked = slice.type === 'untracked';
-                            const isSleep = slice.type === 'sleep';
+            {/* Scrollable Timeline Container */}
+            <div
+                ref={scrollContainerRef}
+                className="relative w-full overflow-x-auto rounded-xl border border-border/50 bg-muted/20 shadow-inner custom-scrollbar"
+            >
+                {/* Scalable Inner Track */}
+                <div
+                    className="relative h-32 transition-all duration-300 ease-in-out"
+                    style={{
+                        width: `${zoomLevel * 100}%`,
+                        minWidth: `${MIN_WIDTH_PX}px` // Ensure it's never too squished
+                    }}
+                >
+                    {/* 1. Grid Lines & Hour Labels */}
+                    <div className="absolute inset-0 flex pointer-events-none">
+                        {hours.map((hour) => (
+                            <div key={hour} className="flex-1 border-r border-border/10 relative h-full">
+                                <span className="absolute bottom-1 left-1 text-[10px] text-muted-foreground/50 font-mono">
+                                    {hour}:00
+                                </span>
+                            </div>
+                        ))}
+                    </div>
 
-                            return (
-                                <Tooltip key={`${index}-bar`}>
-                                    <TooltipTrigger asChild>
-                                        <motion.div
-                                            className={cn(
-                                                "absolute h-full rounded-md border text-xs font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all hover:bg-opacity-90 hover:z-20 hover:shadow-md",
-                                                isSelected ? "z-30 ring-2 ring-primary ring-offset-2" : "z-10",
-                                                isUntracked ? "bg-muted/10 border-dashed border-muted text-muted-foreground hover:bg-muted/20" : "text-white shadow-sm border-white/10"
-                                            )}
-                                            style={{
-                                                left: style.left,
-                                                width: style.width,
-                                                backgroundColor: isUntracked ? undefined : slice.fill,
-                                                opacity: isSleep ? 0.7 : 1
-                                            }}
-                                            onClick={() => !isUntracked && handleExpand(index)}
-                                            initial={{ opacity: 0, scaleX: 0 }}
-                                            animate={{ opacity: isSleep ? 0.7 : 1, scaleX: 1 }}
-                                            transition={{ delay: index * 0.02, duration: 0.3 }}
-                                        >
-                                            {/* Label inside bar if wide enough */}
-                                            <div className="truncate px-1 text-center w-full">
-                                                {parseFloat(style.width) > 4 && (
-                                                    <span>{slice.name}</span>
+                    {/* 2. Timeline Bars */}
+                    <div className="absolute top-2 bottom-6 left-0 right-0">
+                        <TooltipProvider>
+                            {slices.map((slice, index) => {
+                                const isSelected = expandedSliceIndex === index;
+                                const style = getPositionStyle(slice.start, slice.end);
+                                const isUntracked = slice.type === 'untracked';
+                                const isSleep = slice.type === 'sleep';
+
+                                return (
+                                    <Tooltip key={`${index}-bar`}>
+                                        <TooltipTrigger asChild>
+                                            <motion.div
+                                                className={cn(
+                                                    "absolute h-full rounded-md border text-xs font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all hover:bg-opacity-90 hover:z-20 hover:shadow-md",
+                                                    isSelected ? "z-30 ring-2 ring-primary ring-offset-2" : "z-10",
+                                                    isUntracked ? "bg-muted/10 border-dashed border-muted text-muted-foreground hover:bg-muted/20" : "text-white shadow-sm border-white/10"
                                                 )}
+                                                style={{
+                                                    left: style.left,
+                                                    width: style.width,
+                                                    minWidth: '2px', // Ensure visibility for tiny tasks
+                                                    backgroundColor: isUntracked ? undefined : slice.fill,
+                                                    opacity: isSleep ? 0.7 : 1
+                                                }}
+                                                onClick={() => !isUntracked && handleExpand(index)}
+                                                initial={{ opacity: 0, scaleX: 0 }}
+                                                animate={{ opacity: isSleep ? 0.7 : 1, scaleX: 1 }}
+                                                transition={{ delay: index * 0.02, duration: 0.3 }}
+                                            >
+                                                {/* Label inside bar if wide enough */}
+                                                <div className="truncate px-1 text-center w-full">
+                                                    {(parseFloat(style.width) * zoomLevel) > 4 && (
+                                                        <span>{slice.name}</span>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <div className="text-center">
+                                                <p className="font-bold">{slice.name}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {formatTime(slice.start)} - {formatTime(slice.end)}
+                                                </p>
+                                                <p className="text-xs italic">{slice.category}</p>
                                             </div>
-                                        </motion.div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <div className="text-center">
-                                            <p className="font-bold">{slice.name}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {formatTime(slice.start)} - {formatTime(slice.end)}
-                                            </p>
-                                            <p className="text-xs italic">{slice.category}</p>
-                                        </div>
-                                    </TooltipContent>
-                                </Tooltip>
-                            );
-                        })}
-                    </TooltipProvider>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                );
+                            })}
+                        </TooltipProvider>
+                    </div>
                 </div>
             </div>
 
