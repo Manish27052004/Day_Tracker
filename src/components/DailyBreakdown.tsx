@@ -5,13 +5,11 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { generateChartData, formatMinutesToHours, type ViewMode, type LogEntry } from '@/utils/chartLogic';
+import { generateChartData, generateTimelineSlices, formatMinutesToHours, type ViewMode, type LogEntry, type TimelineSlice } from '@/utils/chartLogic';
 import { cn } from '@/lib/utils';
 import { getDateString, Session, Task, Category } from '@/lib/db';
-import { TimelineView, TimelineSession } from './Timeline/TimelineView';
-import { LayoutList, PieChart as PieChartIcon, Mail } from 'lucide-react';
-import { gmailService } from '@/services/gmailService';
-import { toast } from 'sonner';
+import { TimelineView } from './Timeline/TimelineView';
+import { LayoutList, PieChart as PieChartIcon } from 'lucide-react';
 
 interface DailyBreakdownProps {
     selectedDate: Date;
@@ -192,6 +190,17 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
         return colorMap;
     }, [categories, categoryTypes]);
 
+    // Create a map of Category Name -> Type Name for Chart Logic
+    const categoryTypeMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        if (categories) {
+            for (const cat of categories) {
+                if (cat.type) map[cat.name] = cat.type;
+            }
+        }
+        return map;
+    }, [categories]);
+
     // Create a map of taskId to task name
     const taskNameMap = useMemo(() => {
         if (!tasks) return new Map<number, string>();
@@ -204,22 +213,6 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
         }
         return map;
     }, [tasks]);
-
-    // Transform sessions for Timeline
-    const timelineSessions: TimelineSession[] = useMemo(() => {
-        return sessions.map(s => ({
-            id: s.id!,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            category: s.category || 'Uncategorized',
-            customName: s.customName,
-            taskId: s.taskId || undefined,
-            taskName: s.taskId ? taskNameMap.get(s.taskId) : undefined,
-            richContent: s.richContent,
-            color: (s.category && categoryColors[s.category]) ? categoryColors[s.category] : (categoryColors['Uncategorized'] || '#9ca3af')
-        }));
-    }, [sessions, taskNameMap, categoryColors]);
-
 
     // Transform sessions to LogEntry format for Chart
     const logs: LogEntry[] = useMemo(() => {
@@ -246,22 +239,45 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                 category: session.category || 'Uncategorized',
                 customName: sessionName,
                 taskId: session.taskId || null,
+                richContent: session.richContent,
+                originalSessionId: session.id
             };
         });
     }, [sessions, taskNameMap]);
 
-    // Build category type map (Name -> Type)
-    const categoryTypeMap = useMemo(() => {
-        const map: Record<string, string> = {};
-        if (categories) {
-            for (const cat of categories) {
-                if (cat.name && cat.type) {
-                    map[cat.name] = cat.type;
+    // 🔥 Generate Timeline Slices
+    const timelineSlices: TimelineSlice[] = useMemo(() => {
+        const slices = generateTimelineSlices({
+            logs,
+            currentDate: selectedDate,
+            wakeTime: wakeUpTime,
+            bedTime: bedTime,
+            dayStartHour
+        });
+
+        // Add colors & labels based on ViewMode
+        return slices.map(s => {
+            let displayLabel = s.name;
+            let displayColor = categoryColors[s.category] || categoryColors['Uncategorized'] || '#94a3b8';
+
+            // Override label/color based on View Mode
+            if (s.type === 'session') {
+                if (viewMode === 'CATEGORY') {
+                    displayLabel = s.category; // Show Category Name
+                } else if (viewMode === 'SUBCATEGORY') {
+                    displayLabel = s.category; // Subcategory is usually category name in this app structure
                 }
+                // SESSION mode keeps s.name (Custom Name or Task Name)
             }
-        }
-        return map;
-    }, [categories]);
+
+            return {
+                ...s,
+                name: displayLabel,
+                fill: displayColor,
+                originalLog: s.originalLog
+            };
+        });
+    }, [logs, selectedDate, wakeUpTime, bedTime, dayStartHour, categoryColors, viewMode]);
 
     // Generate chart data
     const chartData = useMemo(() => {
@@ -269,12 +285,11 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
             return generateChartData({
                 logs,
                 currentDate: selectedDate,
-                // Use props directly
                 wakeTime: wakeUpTime,
                 bedTime: bedTime,
                 viewMode,
                 categoryColors,
-                categoryTypeMap, // 🔥 PASSING DYNAMIC MAP
+                categoryTypeMap,
                 dayStartHour,
             });
         } catch (error) {
@@ -283,7 +298,7 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
         }
     }, [logs, selectedDate, wakeUpTime, bedTime, viewMode, categoryColors, categoryTypeMap, dayStartHour]);
 
-    // Calculate total tracked time (excluding "Untracked")
+    // Calculate total tracked time
     const totalTrackedMinutes = useMemo(() => {
         return chartData
             .filter((slice) => slice.name !== 'Untracked')
@@ -291,21 +306,13 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
     }, [chartData]);
 
     const handleUpdateRichContent = async (id: number, content: string) => {
-        // Optimistic update
         setSessions(prev => prev.map(s => s.id === id ? { ...s, richContent: content } : s));
-
-        // DB Update
         const { error } = await supabase
             .from('sessions')
             .update({ rich_content: content })
             .eq('id', id);
-
-        if (error) {
-            console.error("Failed to save rich content:", error);
-            // Revert? (Not implemented for simplicity, relying on user retry or eventual consistency)
-        }
+        if (error) console.error("Failed to save rich content:", error);
     };
-
 
     // Custom tooltip
     const CustomTooltip = ({ active, payload }: any) => {
@@ -327,54 +334,15 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
     // Custom center label
     const renderCenterLabel = ({ cx, cy }: any) => {
         const hours = (totalTrackedMinutes / 60).toFixed(1);
-
         return (
             <g>
-                <text
-                    x={cx}
-                    y={cy - 10}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    className="fill-foreground text-2xl font-bold"
-                >
-                    {hours}h
-                </text>
-                <text
-                    x={cx}
-                    y={cy + 15}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    className="fill-muted-foreground text-xs"
-                >
-                    Tracked
-                </text>
+                <text x={cx} y={cy - 10} textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">{hours}h</text>
+                <text x={cx} y={cy + 15} textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">Tracked</text>
             </g>
         );
     };
 
     const hasData = chartData.length > 0;
-
-    const handleSendEmail = async () => {
-        if (!user?.email) {
-            toast.error("User email not found.");
-            return;
-        }
-
-        const toastId = toast.loading("Generating and sending report...");
-        try {
-            await gmailService.generateAndSendDailyReport(selectedDate, user.email);
-            toast.success("Daily report sent to your Gmail!", { id: toastId });
-        } catch (error: unknown) {
-            console.error("Email failed:", error);
-            // Check if it's likely a scope issue
-            const errString = String(error);
-            if (errString.includes("403") || errString.includes("scope")) {
-                toast.error("Permission denied. Please Sign Out and Sign In again to grant Gmail permissions.", { id: toastId, duration: 5000 });
-            } else {
-                toast.error("Failed to send email.", { id: toastId });
-            }
-        }
-    };
 
     if (loading && !sessions.length) {
         return (
@@ -401,18 +369,6 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
-                    {/* Actions */}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={handleSendEmail}
-                        title="Send Daily Report to Gmail"
-                    >
-                        <Mail className="w-4 h-4" />
-                        <span className="hidden sm:inline">Email Report</span>
-                    </Button>
-
                     {/* View Switcher: Chart vs Timeline */}
                     <div className="bg-muted/50 p-1 rounded-lg flex items-center gap-1">
                         <button
@@ -437,25 +393,23 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                         </button>
                     </div>
 
-                    {!showTimeline && (
-                        /* View Mode Toggle - Segmented Control (Only for Chart) */
-                        <div className="bg-muted/50 p-1 rounded-lg flex items-center gap-1 flex-1 md:flex-none overflow-x-auto">
-                            {(['SESSION', 'CATEGORY', 'SUBCATEGORY'] as ViewMode[]).map((mode) => (
-                                <button
-                                    key={mode}
-                                    onClick={() => setViewMode(mode)}
-                                    className={cn(
-                                        "flex-1 md:flex-none px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap",
-                                        viewMode === mode
-                                            ? "bg-background text-foreground shadow-sm scale-[1.02]"
-                                            : "text-muted-foreground hover:text-foreground hover:bg-background/50"
-                                    )}
-                                >
-                                    {mode.charAt(0) + mode.slice(1).toLowerCase()}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                    {/* ALWAYS SHOW View Mode Toggle */}
+                    <div className="bg-muted/50 p-1 rounded-lg flex items-center gap-1 flex-1 md:flex-none overflow-x-auto">
+                        {(['SESSION', 'CATEGORY', 'SUBCATEGORY'] as ViewMode[]).map((mode) => (
+                            <button
+                                key={mode}
+                                onClick={() => setViewMode(mode)}
+                                className={cn(
+                                    "flex-1 md:flex-none px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 whitespace-nowrap",
+                                    viewMode === mode
+                                        ? "bg-background text-foreground shadow-sm scale-[1.02]"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                )}
+                            >
+                                {mode.charAt(0) + mode.slice(1).toLowerCase()}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
@@ -471,7 +425,7 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                             transition={{ duration: 0.3 }}
                         >
                             <TimelineView
-                                sessions={timelineSessions}
+                                slices={timelineSlices}
                                 onUpdateSession={handleUpdateRichContent}
                             />
                         </motion.div>

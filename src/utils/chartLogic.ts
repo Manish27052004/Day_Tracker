@@ -8,6 +8,8 @@ export interface LogEntry {
     category: string;
     customName?: string; // Session name
     taskId?: number | null;
+    richContent?: string;
+    originalSessionId?: number;
 }
 
 export interface ChartSlice {
@@ -108,6 +110,130 @@ function parseTimeWithLogicalOffset(timeStr: string, baseDate: Date, dayStartHou
     return date;
 }
 
+export interface TimelineSlice {
+    name: string;
+    category: string;
+    start: Date;
+    end: Date;
+    type: 'session' | 'sleep' | 'untracked';
+    originalLog?: LogEntry; // Link back to original log for details
+    fill?: string;
+}
+
+export function generateTimelineSlices({
+    logs,
+    currentDate,
+    wakeTime,
+    bedTime,
+    dayStartHour = 0,
+}: Omit<GenerateChartDataParams, 'viewMode' | 'categoryColors' | 'categoryTypeMap'>): TimelineSlice[] {
+    const chartStart = startOfDay(currentDate);
+    chartStart.setHours(dayStartHour, 0, 0, 0);
+    const chartEnd = addHours(chartStart, 24);
+
+    const slices: TimelineSlice[] = [];
+
+    // --- 1. SLEEP SLICES ---
+    try {
+        if (wakeTime) {
+            const wakeDateTime = parseTimeWithLogicalOffset(wakeTime, currentDate, dayStartHour);
+            if (isAfter(wakeDateTime, chartStart) && isBefore(wakeDateTime, chartEnd)) {
+                slices.push({ name: 'Sleep', category: 'Sleep', start: chartStart, end: wakeDateTime, type: 'sleep' });
+            } else if (isAfter(wakeDateTime, chartEnd)) {
+                slices.push({ name: 'Sleep', category: 'Sleep', start: chartStart, end: chartEnd, type: 'sleep' });
+            }
+        }
+
+        if (bedTime) {
+            const bedDateTime = parseTimeWithLogicalOffset(bedTime, currentDate, dayStartHour);
+            if (isAfter(bedDateTime, chartStart) && isBefore(bedDateTime, chartEnd)) {
+                slices.push({ name: 'Sleep', category: 'Sleep', start: bedDateTime, end: chartEnd, type: 'sleep' });
+            }
+        }
+    } catch (error) {
+        console.error('Error generating sleep slices:', error);
+    }
+
+    // --- 2. SESSION SLICES ---
+    for (const log of logs) {
+        try {
+            if (!log.startTime || !log.endTime) continue;
+
+            let logStart = parseTimeWithLogicalOffset(log.startTime, currentDate, dayStartHour);
+            let logEnd = parseTimeWithLogicalOffset(log.endTime, currentDate, dayStartHour);
+
+            if (isBefore(logEnd, logStart)) logEnd = addHours(logEnd, 24); // Handle wrapping
+            if (isBefore(logStart, chartStart)) logStart = chartStart; // Clip start
+
+            const start = logStart < chartStart ? chartStart : logStart;
+            const end = logEnd > chartEnd ? chartEnd : logEnd;
+
+            if (start < end) {
+                // If overlap with sleep? For now, we just push.
+                // Ideally, sessions override sleep or vice versa.
+                // We'll push session, and in "Untracked" calculation we'll handle overlaps.
+                slices.push({
+                    name: log.customName || (log.taskId ? `Task ${log.taskId}` : 'Unnamed'),
+                    category: log.category,
+                    start: start,
+                    end: end,
+                    type: 'session',
+                    originalLog: log
+                });
+            }
+        } catch (error) {
+            console.error('Error processing log:', log, error);
+        }
+    }
+
+    // --- 3. SORT & FILL UNTRACKED ---
+    slices.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    const resultSlices: TimelineSlice[] = [];
+    let currentTime = chartStart;
+
+    // We process slices and fill gaps.
+    // Handling overlaps: simple strategy - next slice can cut short previous one (unlikely with DB validation)
+    // or we just skip if completely covered.
+
+    for (const slice of slices) {
+        // GAP?
+        if (isBefore(currentTime, slice.start)) {
+            // Check if gap > 1 min?
+            const gap = differenceInMinutes(slice.start, currentTime);
+            if (gap > 0) {
+                resultSlices.push({
+                    name: 'Untracked',
+                    category: 'Untracked',
+                    start: currentTime,
+                    end: slice.start,
+                    type: 'untracked'
+                });
+            }
+        }
+
+        // Add Slice (clip start if needed)
+        const effectiveStart = isBefore(slice.start, currentTime) ? currentTime : slice.start;
+        if (isAfter(slice.end, effectiveStart)) {
+            resultSlices.push({ ...slice, start: effectiveStart });
+            currentTime = slice.end;
+        }
+    }
+
+    // Final Gap
+    if (isBefore(currentTime, chartEnd)) {
+        resultSlices.push({
+            name: 'Untracked',
+            category: 'Untracked',
+            start: currentTime,
+            end: chartEnd,
+            type: 'untracked'
+        });
+    }
+
+    return resultSlices;
+}
+
 export function generateChartData({
     logs,
     currentDate,
@@ -118,186 +244,58 @@ export function generateChartData({
     categoryTypeMap = {},
     dayStartHour = 0,
 }: GenerateChartDataParams & { dayStartHour?: number }): ChartSlice[] {
-    // Step 1: Define chart boundaries (Strictly startHour to startHour + 24h of selected date)
-    const chartStart = startOfDay(currentDate);
-    chartStart.setHours(dayStartHour, 0, 0, 0); // Offset start
-    const chartEnd = addHours(chartStart, 24);
 
-    const slices: Array<{ name: string; category: string; start: Date; end: Date }> = [];
+    // 1. Get Normalized Continuous Slices
+    const timelineSlices = generateTimelineSlices({ logs, currentDate, wakeTime, bedTime, dayStartHour });
 
-    // Step 2: Generate virtual sleep slices
-    try {
-        // Morning sleep: chartStart → wakeTime
-        if (wakeTime) {
-            const wakeDateTime = parseTimeWithLogicalOffset(wakeTime, currentDate, dayStartHour);
-
-            // Only add if wake time is valid and after absolute start
-            if (isAfter(wakeDateTime, chartStart) && isBefore(wakeDateTime, chartEnd)) {
-                slices.push({
-                    name: 'Sleep',
-                    category: 'Sleep',
-                    start: chartStart,
-                    end: wakeDateTime,
-                });
-            } else if (isAfter(wakeDateTime, chartEnd)) {
-                // If wake time is arguably after the chart ends (e.g. slept 26 hours?), cap it
-                slices.push({
-                    name: 'Sleep',
-                    category: 'Sleep',
-                    start: chartStart,
-                    end: chartEnd,
-                });
-            }
-        }
-
-        // Night sleep: bedTime → chartEnd
-        if (bedTime) {
-            const bedDateTime = parseTimeWithLogicalOffset(bedTime, currentDate, dayStartHour);
-
-            // Only add if bed time is before chart end
-            if (isAfter(bedDateTime, chartStart) && isBefore(bedDateTime, chartEnd)) {
-                slices.push({
-                    name: 'Sleep',
-                    category: 'Sleep',
-                    start: bedDateTime,
-                    end: chartEnd,
-                });
-            } else if (isBefore(bedDateTime, chartStart)) {
-                // If bed time was before chart start (e.g. went to bed yesterday and still sleeping?), 
-                // typically handled by previous day logic, but here we just clamp or ignore.
-                // For a single day view, we care about sleep STARTING in this day.
-                // If bedTime < chartStart, it might mean we slept ALL day? Unlikely for this simple logic.
-                // Ignore.
-            }
-        }
-    } catch (error) {
-        console.error('Error generating sleep slices:', error);
-    }
-
-    // Step 3: Process real logs
-    for (const log of logs) {
-        try {
-            if (!log.startTime || !log.endTime) continue;
-
-            let logStart = parseTimeWithLogicalOffset(log.startTime, currentDate, dayStartHour);
-            let logEnd = parseTimeWithLogicalOffset(log.endTime, currentDate, dayStartHour);
-
-            // Check for overnight wrap-around (e.g. Start 23:00, End 05:00)
-            // Logic: If we already shifted end due to < startHour, it might be correct.
-            // But if end is STILL before start, it implies > 24h duration or heavy wrap.
-            // Example: Start 22:00 (Jan 12). End 05:00 (Jan 13, shifted because < 4). 
-            // Start < End. Correct.
-            // Example: Start 23:00 (Jan 12). End 01:00 (Jan 13, shifted because < 4).
-            // Start < End. Correct.
-
-            // What if Start < StartHour (e.g. 2 AM session on 4 AM start day)?
-            // Start -> Jan 13 02:00. End -> Jan 13 03:00.
-            // Both > ChartStart (Jan 12 04:00). Correct.
-
-            // Fallback for explicit date-crossing that logic didn't catch (e.g. Start 10:00, End 09:00 next day?)
-            if (isBefore(logEnd, logStart)) {
-                logEnd = addHours(logEnd, 24);
-            }
-
-            // Clip logs to strictly fit within 00:00 - 24:00
-            if (isBefore(logStart, chartStart)) {
-                logStart = chartStart;
-            }
-
-            const start = logStart < chartStart ? chartStart : logStart;
-            const end = logEnd > chartEnd ? chartEnd : logEnd;
-
-            if (start < end) {
-                slices.push({
-                    name: log.customName || `Task ${log.taskId}` || 'Unnamed',
-                    category: log.category,
-                    start: start,
-                    end: end,
-                });
-            }
-
-        } catch (error) {
-            console.error('Error processing log:', log, error);
-        }
-    }
-
-    // Step 4: Calculate total tracked time
-    let totalTrackedMinutes = 0;
-    for (const slice of slices) {
-        const duration = differenceInMinutes(slice.end, slice.start);
-        if (duration > 0) {
-            totalTrackedMinutes += duration;
-        }
-    }
-
-    const totalDayMinutes = 24 * 60;
-    const untrackedMinutes = Math.max(0, totalDayMinutes - totalTrackedMinutes);
-
-    // Step 5: Aggregate by view mode
+    // 2. Aggregate for Chart
     const aggregated = new Map<string, number>();
 
-    for (const slice of slices) {
+    for (const slice of timelineSlices) {
         let key: string;
-
-        switch (viewMode) {
-            case 'SESSION':
-                key = slice.name;
-                break;
-            case 'CATEGORY':
-                // 🔥 FIX: Use dynamic map, defaulting to 'WORK' only if absolutely unknown
-                // If it's Sleep, force type 'LIFE' (or user defined)
-                if (slice.category === 'Sleep') {
-                    key = 'LIFE';
-                } else {
-                    key = categoryTypeMap[slice.category] || 'WORK'; // Fallback
-                }
-                // Uppercase for consistency if user typed "hobby" but wants "HOBBY" display?
-                // The user's screenshot had "WORK" and "LIFE" (uppercase).
-                // Let's assume the DB stores lowercase 'work'/'life' usually, but user might type 'Hobby'.
-                // Ideally we preserve user case or uppercase it. Let's UPPERCASE it for consistency with the screenshot.
-                key = key.toUpperCase();
-                break;
-            case 'SUBCATEGORY':
-                key = slice.category;
-                break;
-            default:
-                key = slice.category;
-        }
-
         const duration = differenceInMinutes(slice.end, slice.start);
-        if (duration > 0) {
-            aggregated.set(key, (aggregated.get(key) || 0) + duration);
+        if (duration <= 0) continue;
+
+        if (slice.type === 'untracked') {
+            key = 'Untracked';
+        } else if (slice.type === 'sleep') {
+            // In Category mode for Pie Chart, Sleep is often grouped or shown as Sleep.
+            // Existing logic: viewMode determines key.
+            // If viewMode is SESSION, Sleep is Sleep.
+            if (viewMode === 'SESSION') key = 'Sleep';
+            else if (viewMode === 'CATEGORY') key = 'LIFE'; // As per prev logic
+            else key = 'Sleep'; // Subcategory
+        } else {
+            // Session
+            switch (viewMode) {
+                case 'SESSION':
+                    key = slice.name;
+                    break;
+                case 'CATEGORY':
+                    key = (categoryTypeMap[slice.category] || 'WORK').toUpperCase();
+                    break;
+                default: // SUBCATEGORY
+                    key = slice.category;
+            }
         }
+
+        aggregated.set(key, (aggregated.get(key) || 0) + duration);
     }
 
-    // Step 6: Build final chart data
+    // 3. Build Chart Data
     const chartData: ChartSlice[] = [];
     let sessionIndex = 0;
 
     for (const [name, value] of aggregated.entries()) {
-        if (value > 0) {
-            let color: string;
-
-            // For SESSION view mode, use distinct session colors
-            if (viewMode === 'SESSION' && name !== 'Sleep') {
-                color = getSessionColor(name, sessionIndex);
-                sessionIndex++;
-            } else {
-                // For other modes or Sleep, use predefined colors
-                color = categoryColors[name] || COLORS[name as keyof typeof COLORS] || '#94a3b8';
-            }
-
-            chartData.push({ name, value, fill: color });
+        let color: string;
+        if (name === 'Untracked') {
+            color = COLORS.Untracked;
+        } else if (viewMode === 'SESSION' && name !== 'Sleep') {
+            color = getSessionColor(name, sessionIndex++);
+        } else {
+            color = categoryColors[name] || COLORS[name as keyof typeof COLORS] || '#94a3b8';
         }
-    }
-
-    // Add untracked time
-    if (untrackedMinutes > 0) {
-        chartData.push({
-            name: 'Untracked',
-            value: untrackedMinutes,
-            fill: COLORS.Untracked,
-        });
+        chartData.push({ name, value, fill: color });
     }
 
     return chartData;

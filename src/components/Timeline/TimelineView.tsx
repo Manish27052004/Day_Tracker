@@ -1,262 +1,257 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { RichEditor } from './RichEditor';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Maximize2, Minimize2, Edit2, Check } from 'lucide-react';
-
-export interface TimelineSession {
-    id: number;
-    startTime: string;
-    endTime: string;
-    category?: string;
-    customName?: string;
-    taskId?: number;
-    taskName?: string;
-    richContent?: string;
-    color?: string; // Hex color
-}
+import { Maximize2, Minimize2, Edit2, Check, Moon, AlertCircle, Info } from 'lucide-react';
+import { TimelineSlice } from '@/utils/chartLogic';
+import { differenceInMinutes } from 'date-fns';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface TimelineViewProps {
-    sessions: TimelineSession[];
+    slices: TimelineSlice[];
     onUpdateSession?: (id: number, content: string) => Promise<void>;
-    onAddSession?: (startTime: string) => void;
     classNames?: string;
 }
 
 export const TimelineView: React.FC<TimelineViewProps> = ({
-    sessions,
+    slices,
     onUpdateSession,
-    onAddSession,
     classNames
 }) => {
-    const [expandedSessionId, setExpandedSessionId] = useState<number | null>(null);
-    const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
+    const [expandedSliceIndex, setExpandedSliceIndex] = useState<number | null>(null);
+    const [editingSliceIndex, setEditingSliceIndex] = useState<number | null>(null);
 
-    // Sort sessions by start time
-    const sortedSessions = [...sessions].sort((a, b) => {
-        return a.startTime.localeCompare(b.startTime);
-    });
+    // Timeline Configuration
+    const TOTAL_MINUTES = 24 * 60; // 1440 minutes
+    const START_HOUR = 0; // 00:00
 
-    const handleExpand = (id: number) => {
-        if (expandedSessionId === id) {
-            setExpandedSessionId(null);
-            setEditingSessionId(null);
+    // Helper: Convert Date to minutes from start of day (00:00)
+    const getMinutesFromStart = (date: Date) => {
+        return date.getHours() * 60 + date.getMinutes();
+    };
+
+    // Helper: Calculate position and width as percentage
+    const getPositionStyle = (start: Date, end: Date) => {
+        const startMins = getMinutesFromStart(start);
+        const endMins = getMinutesFromStart(end);
+
+        // Handle wrapping (if end < start, it means next day, but for this view we clip or assume linear for now)
+        // Since slicing logic handles wrapping by creating separate segments (00:00), simple diff works
+        let duration = endMins - startMins;
+        if (duration < 0) duration += TOTAL_MINUTES; // fallback
+
+        const left = (startMins / TOTAL_MINUTES) * 100;
+        const width = (duration / TOTAL_MINUTES) * 100;
+
+        return { left: `${left}%`, width: `${width}%` };
+    };
+
+    // Generate Hourly Markers (0, 1, 2 ... 23)
+    const hours = Array.from({ length: 25 }, (_, i) => i);
+
+    const handleExpand = (index: number) => {
+        if (expandedSliceIndex === index) {
+            setExpandedSliceIndex(null);
+            setEditingSliceIndex(null);
         } else {
-            setExpandedSessionId(id);
+            setExpandedSliceIndex(index);
         }
     };
 
-    const handleEditToggle = (e: React.MouseEvent, id: number) => {
+    const handleEditToggle = (e: React.MouseEvent, index: number) => {
         e.stopPropagation();
-        if (editingSessionId === id) {
-            setEditingSessionId(null);
+        if (editingSliceIndex === index) {
+            setEditingSliceIndex(null);
         } else {
-            setEditingSessionId(id);
-            setExpandedSessionId(id); // Ensure expanded
+            setEditingSliceIndex(index);
+            setExpandedSliceIndex(index);
         }
     };
 
-    // Helper to calculate minutes from HH:mm
-    const toMinutes = (time: string) => {
-        const [h, m] = time.split(':').map(Number);
-        return h * 60 + m;
+    const formatTime = (date: Date) => {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     };
-
-    // Helper to format minutes to HH:mm
-    const toTimeStr = (minutes: number) => {
-        const h = Math.floor(minutes / 60);
-        const m = minutes % 60;
-        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    };
-
-    // Generate items including GAPS
-    const items: Array<{ type: 'session', data: TimelineSession } | { type: 'gap', startTime: string, duration: number }> = [];
-    let lastEndTimeMinutes = 0; // Start of day (00:00)
-
-    sortedSessions.forEach(session => {
-        const startMinutes = toMinutes(session.startTime);
-        const gap = startMinutes - lastEndTimeMinutes;
-
-        if (gap > 0) {
-            items.push({
-                type: 'gap',
-                startTime: toTimeStr(lastEndTimeMinutes),
-                duration: gap
-            });
-        }
-
-        items.push({ type: 'session', data: session });
-        lastEndTimeMinutes = toMinutes(session.endTime);
-    });
-
-    // Final gap to end of day (24:00)
-    const endOfDayMinutes = 24 * 60;
-    if (lastEndTimeMinutes < endOfDayMinutes) {
-        items.push({
-            type: 'gap',
-            startTime: toTimeStr(lastEndTimeMinutes),
-            duration: endOfDayMinutes - lastEndTimeMinutes
-        });
-    }
 
     return (
-        <div className={cn("relative pl-4 space-y-4 pb-20", classNames)}>
-            {/* Vertical Line */}
-            <div className="absolute left-[27px] top-4 bottom-4 w-0.5 bg-border/50" />
+        <div className={cn("space-y-6 select-none", classNames)}>
 
-            <div className="space-y-2">
-                {items.map((item, index) => {
-                    if (item.type === 'gap') {
-                        // Don't show tiny gaps that are hard to click
-                        if (item.duration < 10) return null;
+            {/* Main Horizontal Timeline Container */}
+            <div className="relative h-32 w-full bg-muted/20 rounded-xl border border-border/50 overflow-hidden shadow-inner">
 
-                        return (
-                            <div
-                                key={`gap-${index}`}
-                                className="group flex items-center gap-4 relative pl-[7px] py-4 cursor-pointer hover:bg-muted/10 rounded-lg transition-colors"
-                                onClick={() => onAddSession && onAddSession(item.startTime)}
-                            >
-                                <div className="w-10 flex flex-col items-center">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-border group-hover:bg-primary group-hover:scale-150 transition-all" />
-                                </div>
-                                <div className="flex-1 border-t border-dashed border-border/40 group-hover:border-primary/40 relative">
-                                    <span className="absolute -top-3 left-4 text-[10px] text-muted-foreground group-hover:text-primary transition-colors bg-background px-1">
-                                        + Add at {item.startTime}
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    }
+                {/* 1. Grid Lines & Hour Labels */}
+                <div className="absolute inset-0 flex pointer-events-none">
+                    {hours.map((hour) => (
+                        <div key={hour} className="flex-1 border-r border-border/10 relative h-full">
+                            <span className="absolute bottom-1 left-1 text-[10px] text-muted-foreground/50 font-mono">
+                                {hour}:00
+                            </span>
+                        </div>
+                    ))}
+                </div>
 
-                    const session = item.data;
-                    const isExpanded = expandedSessionId === session.id;
-                    const isEditing = editingSessionId === session.id;
+                {/* 2. Timeline Bars */}
+                <div className="absolute top-2 bottom-6 left-0 right-0">
+                    <TooltipProvider>
+                        {slices.map((slice, index) => {
+                            const isSelected = expandedSliceIndex === index;
+                            const style = getPositionStyle(slice.start, slice.end);
+                            const isUntracked = slice.type === 'untracked';
+                            const isSleep = slice.type === 'sleep';
 
-                    return (
-                        <motion.div
-                            key={session.id}
-                            layout
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            className="relative z-10"
-                        >
-                            <div className="flex items-start gap-4">
-                                {/* Time Node */}
-                                <div className="flex flex-col items-center mt-1 min-w-[50px]">
-                                    <span className="text-xs font-mono text-muted-foreground bg-background px-1 z-10">
-                                        {session.startTime}
-                                    </span>
-                                    <div
-                                        className={cn(
-                                            "w-4 h-4 rounded-full border-2 bg-background z-20 mt-1 transition-colors hover:scale-110 cursor-pointer",
-                                            isExpanded ? "scale-110 border-primary bg-primary" : "border-muted-foreground"
-                                        )}
-                                        style={{ borderColor: session.color, backgroundColor: isExpanded ? session.color : undefined }}
-                                        onClick={() => handleExpand(session.id)}
-                                    />
-                                    {isExpanded && (
-                                        <div className="h-full w-0.5 bg-primary/20 absolute top-8 bottom-0" />
-                                    )}
-                                </div>
+                            return (
+                                <Tooltip key={`${index}-bar`}>
+                                    <TooltipTrigger asChild>
+                                        <motion.div
+                                            className={cn(
+                                                "absolute h-full rounded-md border text-xs font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all hover:bg-opacity-90 hover:z-20 hover:shadow-md",
+                                                isSelected ? "z-30 ring-2 ring-primary ring-offset-2" : "z-10",
+                                                isUntracked ? "bg-muted/10 border-dashed border-muted text-muted-foreground hover:bg-muted/20" : "text-white shadow-sm border-white/10"
+                                            )}
+                                            style={{
+                                                left: style.left,
+                                                width: style.width,
+                                                backgroundColor: isUntracked ? undefined : slice.fill,
+                                                opacity: isSleep ? 0.7 : 1
+                                            }}
+                                            onClick={() => !isUntracked && handleExpand(index)}
+                                            initial={{ opacity: 0, scaleX: 0 }}
+                                            animate={{ opacity: isSleep ? 0.7 : 1, scaleX: 1 }}
+                                            transition={{ delay: index * 0.02, duration: 0.3 }}
+                                        >
+                                            {/* Label inside bar if wide enough */}
+                                            <div className="truncate px-1 text-center w-full">
+                                                {parseFloat(style.width) > 4 && (
+                                                    <span>{slice.name}</span>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div className="text-center">
+                                            <p className="font-bold">{slice.name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {formatTime(slice.start)} - {formatTime(slice.end)}
+                                            </p>
+                                            <p className="text-xs italic">{slice.category}</p>
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            );
+                        })}
+                    </TooltipProvider>
+                </div>
+            </div>
 
-                                {/* Content Card */}
-                                <div className="flex-1 min-w-0 pb-4">
-                                    <Card
-                                        className={cn(
-                                            "transition-all duration-300 overflow-hidden border-l-4",
-                                            isExpanded ? "shadow-md ring-1 ring-primary/10" : "hover:bg-muted/30 cursor-pointer"
-                                        )}
-                                        style={{ borderLeftColor: session.color || '#3b82f6' }}
-                                        onClick={() => !isEditing && handleExpand(session.id)}
-                                    >
-                                        <div className="p-4">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <div>
-                                                    <h3 className="font-semibold text-lg leading-tight">
-                                                        {session.customName || session.taskName || 'Unnamed Session'}
-                                                    </h3>
-                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                                                        <span className="bg-muted px-2 py-0.5 rounded-full">
-                                                            {session.category || 'Uncategorized'}
-                                                        </span>
-                                                        <span>
-                                                            {session.startTime} - {session.endTime}
-                                                        </span>
-                                                    </div>
-                                                </div>
+            {/* 3. Detail / Description Panel (Shows when clicked) */}
+            <AnimatePresence mode="wait">
+                {expandedSliceIndex !== null && (
+                    <motion.div
+                        key="details-panel"
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="bg-card border border-border rounded-xl p-6 shadow-sm"
+                    >
+                        {(() => {
+                            const slice = slices[expandedSliceIndex];
+                            const isEditing = editingSliceIndex === expandedSliceIndex;
+                            const isSession = slice.type === 'session';
 
-                                                <div className="flex items-center gap-1">
-                                                    {/* Actions */}
-                                                    {isExpanded && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            onClick={(e) => handleEditToggle(e, session.id)}
-                                                        >
-                                                            {isEditing ? <Check className="w-4 h-4 text-green-500" /> : <Edit2 className="w-4 h-4" />}
-                                                        </Button>
-                                                    )}
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); handleExpand(session.id); }}>
-                                                        {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                                                    </Button>
+                            return (
+                                <div className="space-y-4">
+                                    {/* Detailed Header */}
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div
+                                                className="w-4 h-4 rounded-full shadow-sm"
+                                                style={{ backgroundColor: slice.fill }}
+                                            />
+                                            <div>
+                                                <h3 className="text-xl font-bold">{slice.name}</h3>
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                                                    <span className="font-mono bg-muted px-1.5 rounded">{formatTime(slice.start)} - {formatTime(slice.end)}</span>
+                                                    <span>•</span>
+                                                    <span>{slice.category}</span>
+                                                    {slice.type === 'sleep' && <span>• 😴 Sleep</span>}
                                                 </div>
                                             </div>
-
-                                            {/* Rich Content Area */}
-                                            <AnimatePresence>
-                                                {isExpanded && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, height: 0 }}
-                                                        animate={{ opacity: 1, height: 'auto' }}
-                                                        exit={{ opacity: 0, height: 0 }}
-                                                        className="mt-4 border-t border-border/50 pt-4"
-                                                    >
-                                                        <div onClick={(e) => e.stopPropagation()}>
-                                                            <RichEditor
-                                                                initialContent={session.richContent}
-                                                                editable={isEditing}
-                                                                onChange={(content) => {
-                                                                    if (onUpdateSession) {
-                                                                        onUpdateSession(session.id, content);
-                                                                    }
-                                                                }}
-                                                                className={isEditing ? "min-h-[200px]" : "pointer-events-none"}
-                                                            />
-                                                        </div>
-                                                        {isEditing && (
-                                                            <div className="flex justify-end mt-2">
-                                                                <p className="text-xs text-muted-foreground mr-auto self-center">
-                                                                    Saving automatically...
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
                                         </div>
-                                    </Card>
-                                </div>
-                            </div>
-                        </motion.div>
-                    );
-                })}
 
-                {sessions.length === 0 && (
-                    <div
-                        className="text-center py-12 text-muted-foreground border-2 border-dashed border-border rounded-xl hover:bg-muted/10 cursor-pointer transition-colors"
-                        onClick={() => onAddSession && onAddSession("09:00")}
-                    >
-                        <p>Empty Day</p>
-                        <p className="text-sm opacity-70">Click to start planning your day</p>
-                    </div>
+                                        {isSession && slice.originalLog?.taskId && (
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    variant={isEditing ? "default" : "outline"}
+                                                    size="sm"
+                                                    onClick={(e) => handleEditToggle(e, expandedSliceIndex)}
+                                                    className="gap-2"
+                                                >
+                                                    {isEditing ? (
+                                                        <>
+                                                            <Check className="w-3 h-3" /> Done
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Edit2 className="w-3 h-3" /> Edit Notes
+                                                        </>
+                                                    )}
+                                                </Button>
+                                                <Button variant="ghost" size="icon" onClick={() => setExpandedSliceIndex(null)}>
+                                                    <Minimize2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {!isSession && (
+                                            <Button variant="ghost" size="icon" onClick={() => setExpandedSliceIndex(null)}>
+                                                <Minimize2 className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {/* Description / Rich Content */}
+                                    {isSession && (
+                                        <div className="mt-4 pt-4 border-t border-border/50">
+                                            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-2">
+                                                <Info className="w-3 h-3" /> Description & Notes
+                                            </h4>
+
+                                            {/* Editable Rich Content */}
+                                            <div className={cn("rounded-md", isEditing ? "ring-1 ring-primary/20" : "")}>
+                                                <RichEditor
+                                                    initialContent={slice.originalLog?.richContent}
+                                                    editable={isEditing}
+                                                    onChange={(content) => {
+                                                        if (onUpdateSession && slice.originalLog?.originalSessionId) {
+                                                            onUpdateSession(slice.originalLog.originalSessionId, content);
+                                                        }
+                                                    }}
+                                                    className={isEditing ? "min-h-[150px] p-2" : "py-2 pointer-events-none"}
+                                                />
+                                            </div>
+
+                                            {isEditing && (
+                                                <p className="text-xs text-muted-foreground mt-2 text-right">
+                                                    Changes saved automatically
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+                    </motion.div>
                 )}
-            </div>
+            </AnimatePresence>
+
+            {/* Legend / Instructions when nothing selected */}
+            {expandedSliceIndex === null && (
+                <div className="text-center text-sm text-muted-foreground py-4 opacity-50">
+                    Click on a timeline block to view details and edit notes.
+                </div>
+            )}
         </div>
     );
 };
+
