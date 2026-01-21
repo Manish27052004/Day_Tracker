@@ -27,7 +27,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
     // Timeline Configuration
     const TOTAL_MINUTES = 24 * 60; // 1440 minutes
-    const MIN_WIDTH_PX = 1000; // Base width at 1x zoom
+    const MIN_WIDTH_PX = 1800; // Expanded base width for better breathing room
 
     // Grouping Logic: Group Slices by "Name" (which corresponds to ViewMode logic)
     const groupedSlices = useMemo(() => {
@@ -105,42 +105,42 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     const handleResetZoom = () => setZoomLevel(1);
 
     return (
-        <div className={cn("flex flex-col h-[600px] select-none bg-background/50 rounded-xl border border-border overflow-hidden", classNames)}>
+        <div className={cn("flex flex-col h-[650px] select-none bg-background/40 rounded-xl border border-border/60 overflow-hidden shadow-sm", classNames)}>
 
             {/* Toolbar */}
-            <div className="flex items-center justify-between p-2 border-b border-border/50 bg-card/30">
+            <div className="flex items-center justify-between p-2 border-b border-border/50 bg-[#121212]/80 backdrop-blur-sm z-40">
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={handleZoomOut} disabled={zoomLevel <= 1} title="Zoom Out" className="h-8 w-8 p-0">
+                    <Button variant="ghost" size="sm" onClick={handleZoomOut} disabled={zoomLevel <= 1} title="Zoom Out" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
                         <ZoomOut className="w-4 h-4" />
                     </Button>
                     <span className="text-xs font-mono w-10 text-center text-muted-foreground">{Math.round(zoomLevel * 100)}%</span>
-                    <Button variant="ghost" size="sm" onClick={handleZoomIn} disabled={zoomLevel >= 4} title="Zoom In" className="h-8 w-8 p-0">
+                    <Button variant="ghost" size="sm" onClick={handleZoomIn} disabled={zoomLevel >= 4} title="Zoom In" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
                         <ZoomIn className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={handleResetZoom} disabled={zoomLevel === 1} title="Reset Zoom" className="h-8 w-8 p-0">
+                    <Button variant="ghost" size="sm" onClick={handleResetZoom} disabled={zoomLevel === 1} title="Reset Zoom" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
                         <RotateCcw className="w-3 h-3" />
                     </Button>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                    Shift+Scroll to pan horizontally
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Timeline View
                 </div>
             </div>
 
             {/* RESTART LAYOUT: CSS Grid for 2D Scrolling */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+            <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-[#09090b]">
                 <div className="min-w-full inline-block">
                     <div className="flex">
                         {/* Column 1: Sidebar (Sticky Left) */}
-                        <div className="sticky left-0 z-30 w-[180px] shrink-0 bg-background border-r border-border/50 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.5)]">
+                        <div className="sticky left-0 z-30 w-[200px] shrink-0 bg-[#0a0a0a] border-r border-border/40 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.8)]">
                             {/* Corner */}
-                            <div className="h-9 border-b border-border/50 bg-muted/30 flex items-center px-4">
-                                <span className="text-xs font-bold text-muted-foreground">GROUP</span>
+                            <div className="h-9 border-b border-border/40 bg-[#121212] flex items-center px-4">
+                                <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">Type</span>
                             </div>
                             {/* Row Labels */}
                             <div className="flex flex-col pb-4">
                                 {groupedSlices.map((group) => (
-                                    <div key={group.name} className="h-12 flex items-center px-4 border-b border-border/10 last:border-0 truncate">
-                                        <span className="text-xs font-medium truncate" title={group.name}>{group.name}</span>
+                                    <div key={group.name} className="h-14 flex items-center px-4 border-b border-border/5 last:border-0 truncate group/row transition-colors hover:bg-white/[0.02]">
+                                        <span className="text-xs font-medium text-foreground/80 truncate group-hover/row:text-foreground transition-colors" title={group.name}>{group.name}</span>
                                     </div>
                                 ))}
                             </div>
@@ -149,10 +149,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                         {/* Column 2: Timeline Track (Scrolls Horizontally) */}
                         <div className="flex-1 overflow-x-hidden" style={{ width: `${zoomLevel * 100}%`, minWidth: MIN_WIDTH_PX }}>
                             {/* Sticky Header (Time Axis) */}
-                            <div className="sticky top-0 z-20 h-9 bg-muted/30 border-b border-border/50 flex relative">
+                            <div className="sticky top-0 z-20 h-9 bg-[#0c0c0c] border-b border-border/40 flex relative shadow-sm">
                                 {hours.map((hour) => (
-                                    <div key={hour} className="flex-1 border-r border-border/10 relative h-full">
-                                        <span className="absolute top-2 left-1 text-[10px] text-muted-foreground font-mono">
+                                    <div key={hour} className="flex-1 border-r border-border/5 relative h-full group/time">
+                                        <span className="absolute top-2 left-1 text-[10px] text-muted-foreground/40 font-mono group-hover/time:text-muted-foreground transition-colors">
                                             {hour}:00
                                         </span>
                                     </div>
@@ -164,14 +164,14 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                 {/* Grid Lines Background */}
                                 <div className="absolute inset-0 flex pointer-events-none">
                                     {hours.map((hour) => (
-                                        <div key={hour} className="flex-1 border-r border-border/5 relative h-full" />
+                                        <div key={hour} className="flex-1 border-r border-dashed border-border/5 relative h-full" />
                                     ))}
                                 </div>
 
                                 {groupedSlices.map((group) => (
-                                    <div key={group.name} className="h-12 border-b border-border/10 last:border-0 relative w-full">
+                                    <div key={group.name} className="h-14 border-b border-border/5 last:border-0 relative w-full hover:bg-white/[0.01] transition-colors">
 
-                                        <TooltipProvider>
+                                        <TooltipProvider delayDuration={100}>
                                             {group.slices.map((slice, i) => {
                                                 const globalIndex = slices.findIndex(s => s === slice);
 
@@ -185,36 +185,42 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                                         <TooltipTrigger asChild>
                                                             <motion.div
                                                                 className={cn(
-                                                                    "absolute top-2 bottom-2 rounded-sm border text-[10px] font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all hover:bg-opacity-90 hover:z-20 hover:shadow-md",
-                                                                    isSelected ? "z-30 ring-1 ring-primary ring-offset-1" : "z-10",
-                                                                    isUntracked ? "bg-muted/5 border-dashed border-border/20 text-muted-foreground/30 hover:bg-muted/10 opacity-50" : "text-white shadow-sm border-white/5"
+                                                                    "absolute top-3 bottom-3 rounded-md border text-[10px] font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all duration-200",
+                                                                    isSelected ? "z-30 ring-2 ring-primary/70 ring-offset-1 ring-offset-background shadow-lg scale-[1.02]" : "z-10 hover:z-20",
+                                                                    !isSelected && !isUntracked && !isSleep && "hover:brightness-110 hover:shadow-md hover:scale-[1.01] hover:border-white/20",
+                                                                    isUntracked
+                                                                        ? "border-none bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.03)_25%,rgba(255,255,255,0.03)_50%,transparent_50%,transparent_75%,rgba(255,255,255,0.03)_75%,rgba(255,255,255,0.03)_100%)] bg-[length:24px_24px] opacity-60 hover:opacity-100"
+                                                                        : "text-white shadow-sm border-white/5",
+                                                                    isSleep && "bg-indigo-950/20 border-indigo-500/10 text-indigo-300/50"
                                                                 )}
                                                                 style={{
                                                                     left: style.left,
                                                                     width: style.width,
-                                                                    minWidth: '2px',
-                                                                    backgroundColor: isUntracked ? undefined : slice.fill,
-                                                                    opacity: isSleep ? 0.3 : 1
+                                                                    minWidth: '4px',
+                                                                    backgroundColor: (isUntracked || isSleep) ? undefined : slice.fill,
+                                                                    opacity: isSleep ? 1 : (isUntracked ? undefined : 1)
                                                                 }}
                                                                 onClick={() => !isUntracked && handleExpand(slice, globalIndex)}
                                                                 initial={{ opacity: 0, scaleX: 0 }}
-                                                                animate={{ opacity: isSleep ? 0.3 : 1, scaleX: 1 }}
+                                                                animate={{ opacity: 1, scaleX: 1 }}
                                                                 transition={{ delay: i * 0.01, duration: 0.3 }}
                                                             >
-                                                                <div className="truncate px-1 text-center w-full">
+                                                                <div className="truncate px-1 text-center w-full drop-shadow-sm">
                                                                     {zoomLevel > 1.5 && parseFloat(style.width) * zoomLevel > 30 && (
-                                                                        <span>{slice.name}</span>
+                                                                        <span className={cn(isSleep && "italic text-xs")}>{slice.name}</span>
                                                                     )}
                                                                 </div>
                                                             </motion.div>
                                                         </TooltipTrigger>
-                                                        <TooltipContent className="bg-[#191919] border-border text-white">
+                                                        <TooltipContent className="bg-[#121212] border-border text-white shadow-xl" sideOffset={5}>
                                                             <div className="text-center">
-                                                                <p className="font-bold">{slice.name}</p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {formatTime(slice.start)} - {formatTime(slice.end)}
-                                                                </p>
-                                                                <p className="text-xs italic text-muted-foreground/70">{slice.category}</p>
+                                                                <p className="font-bold text-sm mb-1">{slice.name}</p>
+                                                                <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/80 font-mono bg-muted/20 rounded px-2 py-1">
+                                                                    <span>{formatTime(slice.start)}</span>
+                                                                    <span>→</span>
+                                                                    <span>{formatTime(slice.end)}</span>
+                                                                </div>
+                                                                <p className="text-xs italic text-muted-foreground mt-2">{slice.category}</p>
                                                             </div>
                                                         </TooltipContent>
                                                     </Tooltip>
