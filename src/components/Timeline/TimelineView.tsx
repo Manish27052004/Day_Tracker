@@ -1,12 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { RichEditor } from './RichEditor';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Maximize2, Minimize2, Edit2, Check, Moon, AlertCircle, Info, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Maximize2, Minimize2, Edit2, Check, Info, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { TimelineSlice } from '@/utils/chartLogic';
-import { differenceInMinutes } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface TimelineViewProps {
@@ -29,8 +27,33 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
     // Timeline Configuration
     const TOTAL_MINUTES = 24 * 60; // 1440 minutes
-    const START_HOUR = 0; // 00:00
-    const MIN_WIDTH_PX = 1000; // Base width at 1x zoom (ensures roughly 0.7px per minute)
+    const MIN_WIDTH_PX = 1000; // Base width at 1x zoom
+
+    // Grouping Logic: Group Slices by "Name" (which corresponds to ViewMode logic)
+    const groupedSlices = useMemo(() => {
+        const groups: Record<string, TimelineSlice[]> = {};
+
+        slices.forEach(slice => {
+            const key = slice.name;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(slice);
+        });
+
+        // Sort keys alphabetically, but put Sleep/Untracked at end
+        const sortedKeys = Object.keys(groups).sort((a, b) => {
+            if (a === 'Sleep') return 1;
+            if (b === 'Sleep') return -1;
+            if (a === 'Untracked') return 1;
+            if (b === 'Untracked') return -1;
+            return a.localeCompare(b);
+        });
+
+        return sortedKeys.map(key => ({
+            name: key,
+            slices: groups[key]
+        }));
+    }, [slices]);
+
 
     // Helper: Convert Date to minutes from start of day (00:00)
     const getMinutesFromStart = (date: Date) => {
@@ -42,10 +65,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         const startMins = getMinutesFromStart(start);
         const endMins = getMinutesFromStart(end);
 
-        // Handle wrapping (if end < start, it means next day, but for this view we clip or assume linear for now)
-        // Since slicing logic handles wrapping by creating separate segments (00:00), simple diff works
         let duration = endMins - startMins;
-        if (duration < 0) duration += TOTAL_MINUTES; // fallback
+        if (duration < 0) duration += TOTAL_MINUTES; // fallback for wrapping
 
         const left = (startMins / TOTAL_MINUTES) * 100;
         const width = (duration / TOTAL_MINUTES) * 100;
@@ -56,22 +77,22 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     // Generate Hourly Markers (0, 1, 2 ... 23)
     const hours = Array.from({ length: 25 }, (_, i) => i);
 
-    const handleExpand = (index: number) => {
-        if (expandedSliceIndex === index) {
+    const handleExpand = (slice: TimelineSlice, globalIndex: number) => {
+        if (expandedSliceIndex === globalIndex) {
             setExpandedSliceIndex(null);
             setEditingSliceIndex(null);
         } else {
-            setExpandedSliceIndex(index);
+            setExpandedSliceIndex(globalIndex);
         }
     };
 
-    const handleEditToggle = (e: React.MouseEvent, index: number) => {
+    const handleEditToggle = (e: React.MouseEvent, globalIndex: number) => {
         e.stopPropagation();
-        if (editingSliceIndex === index) {
+        if (editingSliceIndex === globalIndex) {
             setEditingSliceIndex(null);
         } else {
-            setEditingSliceIndex(index);
-            setExpandedSliceIndex(index);
+            setEditingSliceIndex(globalIndex);
+            setExpandedSliceIndex(globalIndex);
         }
     };
 
@@ -79,120 +100,145 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
-    const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 4)); // Max 4x
-    const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1)); // Min 1x
+    const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 4));
+    const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
     const handleResetZoom = () => setZoomLevel(1);
 
     return (
-        <div className={cn("space-y-4 select-none", classNames)}>
+        <div className={cn("flex flex-col h-[600px] select-none bg-background/50 rounded-xl border border-border overflow-hidden", classNames)}>
 
             {/* Toolbar */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between p-2 border-b border-border/50 bg-card/30">
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handleZoomOut} disabled={zoomLevel <= 1} title="Zoom Out">
+                    <Button variant="ghost" size="sm" onClick={handleZoomOut} disabled={zoomLevel <= 1} title="Zoom Out" className="h-8 w-8 p-0">
                         <ZoomOut className="w-4 h-4" />
                     </Button>
-                    <span className="text-xs font-mono w-12 text-center">{Math.round(zoomLevel * 100)}%</span>
-                    <Button variant="outline" size="sm" onClick={handleZoomIn} disabled={zoomLevel >= 4} title="Zoom In">
+                    <span className="text-xs font-mono w-10 text-center text-muted-foreground">{Math.round(zoomLevel * 100)}%</span>
+                    <Button variant="ghost" size="sm" onClick={handleZoomIn} disabled={zoomLevel >= 4} title="Zoom In" className="h-8 w-8 p-0">
                         <ZoomIn className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={handleResetZoom} disabled={zoomLevel === 1} title="Reset Zoom">
+                    <Button variant="ghost" size="sm" onClick={handleResetZoom} disabled={zoomLevel === 1} title="Reset Zoom" className="h-8 w-8 p-0">
                         <RotateCcw className="w-3 h-3" />
                     </Button>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                    Scroll horizontally to view details
+                    Shift+Scroll to pan horizontally
                 </div>
             </div>
 
-            {/* Scrollable Timeline Container */}
-            <div
-                ref={scrollContainerRef}
-                className="relative w-full overflow-x-auto rounded-xl border border-border/50 bg-muted/20 shadow-inner custom-scrollbar"
-            >
-                {/* Scalable Inner Track */}
-                <div
-                    className="relative h-32 transition-all duration-300 ease-in-out"
-                    style={{
-                        width: `${zoomLevel * 100}%`,
-                        minWidth: `${MIN_WIDTH_PX}px` // Ensure it's never too squished
-                    }}
-                >
-                    {/* 1. Grid Lines & Hour Labels */}
-                    <div className="absolute inset-0 flex pointer-events-none">
-                        {hours.map((hour) => (
-                            <div key={hour} className="flex-1 border-r border-border/10 relative h-full">
-                                <span className="absolute bottom-1 left-1 text-[10px] text-muted-foreground/50 font-mono">
-                                    {hour}:00
-                                </span>
+            {/* RESTART LAYOUT: CSS Grid for 2D Scrolling */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+                <div className="min-w-full inline-block">
+                    <div className="flex">
+                        {/* Column 1: Sidebar (Sticky Left) */}
+                        <div className="sticky left-0 z-30 w-[180px] shrink-0 bg-background border-r border-border/50 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.5)]">
+                            {/* Corner */}
+                            <div className="h-9 border-b border-border/50 bg-muted/30 flex items-center px-4">
+                                <span className="text-xs font-bold text-muted-foreground">GROUP</span>
                             </div>
-                        ))}
-                    </div>
+                            {/* Row Labels */}
+                            <div className="flex flex-col pb-4">
+                                {groupedSlices.map((group) => (
+                                    <div key={group.name} className="h-12 flex items-center px-4 border-b border-border/10 last:border-0 truncate">
+                                        <span className="text-xs font-medium truncate" title={group.name}>{group.name}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
 
-                    {/* 2. Timeline Bars */}
-                    <div className="absolute top-2 bottom-6 left-0 right-0">
-                        <TooltipProvider>
-                            {slices.map((slice, index) => {
-                                const isSelected = expandedSliceIndex === index;
-                                const style = getPositionStyle(slice.start, slice.end);
-                                const isUntracked = slice.type === 'untracked';
-                                const isSleep = slice.type === 'sleep';
+                        {/* Column 2: Timeline Track (Scrolls Horizontally) */}
+                        <div className="flex-1 overflow-x-hidden" style={{ width: `${zoomLevel * 100}%`, minWidth: MIN_WIDTH_PX }}>
+                            {/* Sticky Header (Time Axis) */}
+                            <div className="sticky top-0 z-20 h-9 bg-muted/30 border-b border-border/50 flex relative">
+                                {hours.map((hour) => (
+                                    <div key={hour} className="flex-1 border-r border-border/10 relative h-full">
+                                        <span className="absolute top-2 left-1 text-[10px] text-muted-foreground font-mono">
+                                            {hour}:00
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
 
-                                return (
-                                    <Tooltip key={`${index}-bar`}>
-                                        <TooltipTrigger asChild>
-                                            <motion.div
-                                                className={cn(
-                                                    "absolute h-full rounded-md border text-xs font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all hover:bg-opacity-90 hover:z-20 hover:shadow-md",
-                                                    isSelected ? "z-30 ring-2 ring-primary ring-offset-2" : "z-10",
-                                                    isUntracked ? "bg-muted/10 border-dashed border-muted text-muted-foreground hover:bg-muted/20" : "text-white shadow-sm border-white/10"
-                                                )}
-                                                style={{
-                                                    left: style.left,
-                                                    width: style.width,
-                                                    minWidth: '2px', // Ensure visibility for tiny tasks
-                                                    backgroundColor: isUntracked ? undefined : slice.fill,
-                                                    opacity: isSleep ? 0.7 : 1
-                                                }}
-                                                onClick={() => !isUntracked && handleExpand(index)}
-                                                initial={{ opacity: 0, scaleX: 0 }}
-                                                animate={{ opacity: isSleep ? 0.7 : 1, scaleX: 1 }}
-                                                transition={{ delay: index * 0.02, duration: 0.3 }}
-                                            >
-                                                {/* Label inside bar if wide enough */}
-                                                <div className="truncate px-1 text-center w-full">
-                                                    {(parseFloat(style.width) * zoomLevel) > 4 && (
-                                                        <span>{slice.name}</span>
-                                                    )}
-                                                </div>
-                                            </motion.div>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <div className="text-center">
-                                                <p className="font-bold">{slice.name}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {formatTime(slice.start)} - {formatTime(slice.end)}
-                                                </p>
-                                                <p className="text-xs italic">{slice.category}</p>
-                                            </div>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                );
-                            })}
-                        </TooltipProvider>
+                            {/* Timeline Rows */}
+                            <div className="flex flex-col pb-4 relative">
+                                {/* Grid Lines Background */}
+                                <div className="absolute inset-0 flex pointer-events-none">
+                                    {hours.map((hour) => (
+                                        <div key={hour} className="flex-1 border-r border-border/5 relative h-full" />
+                                    ))}
+                                </div>
+
+                                {groupedSlices.map((group) => (
+                                    <div key={group.name} className="h-12 border-b border-border/10 last:border-0 relative w-full">
+
+                                        <TooltipProvider>
+                                            {group.slices.map((slice, i) => {
+                                                const globalIndex = slices.findIndex(s => s === slice);
+
+                                                const isSelected = expandedSliceIndex === globalIndex;
+                                                const style = getPositionStyle(slice.start, slice.end);
+                                                const isUntracked = slice.type === 'untracked';
+                                                const isSleep = slice.type === 'sleep';
+
+                                                return (
+                                                    <Tooltip key={i}>
+                                                        <TooltipTrigger asChild>
+                                                            <motion.div
+                                                                className={cn(
+                                                                    "absolute top-2 bottom-2 rounded-sm border text-[10px] font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all hover:bg-opacity-90 hover:z-20 hover:shadow-md",
+                                                                    isSelected ? "z-30 ring-1 ring-primary ring-offset-1" : "z-10",
+                                                                    isUntracked ? "bg-muted/5 border-dashed border-border/20 text-muted-foreground/30 hover:bg-muted/10 opacity-50" : "text-white shadow-sm border-white/5"
+                                                                )}
+                                                                style={{
+                                                                    left: style.left,
+                                                                    width: style.width,
+                                                                    minWidth: '2px',
+                                                                    backgroundColor: isUntracked ? undefined : slice.fill,
+                                                                    opacity: isSleep ? 0.3 : 1
+                                                                }}
+                                                                onClick={() => !isUntracked && handleExpand(slice, globalIndex)}
+                                                                initial={{ opacity: 0, scaleX: 0 }}
+                                                                animate={{ opacity: isSleep ? 0.3 : 1, scaleX: 1 }}
+                                                                transition={{ delay: i * 0.01, duration: 0.3 }}
+                                                            >
+                                                                <div className="truncate px-1 text-center w-full">
+                                                                    {zoomLevel > 1.5 && parseFloat(style.width) * zoomLevel > 30 && (
+                                                                        <span>{slice.name}</span>
+                                                                    )}
+                                                                </div>
+                                                            </motion.div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent className="bg-[#191919] border-border text-white">
+                                                            <div className="text-center">
+                                                                <p className="font-bold">{slice.name}</p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    {formatTime(slice.start)} - {formatTime(slice.end)}
+                                                                </p>
+                                                                <p className="text-xs italic text-muted-foreground/70">{slice.category}</p>
+                                                            </div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                );
+                                            })}
+                                        </TooltipProvider>
+
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* 3. Detail / Description Panel (Shows when clicked) */}
+            {/* Detail / Description Bottom Panel (Same as before) */}
             <AnimatePresence mode="wait">
-                {expandedSliceIndex !== null && (
+                {expandedSliceIndex !== null && slices[expandedSliceIndex] && (
                     <motion.div
                         key="details-panel"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="bg-card border border-border rounded-xl p-6 shadow-sm"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="bg-card border-t border-border p-4 shadow-xl z-40 shrink-0"
                     >
                         {(() => {
                             const slice = slices[expandedSliceIndex];
@@ -200,64 +246,48 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                             const isSession = slice.type === 'session';
 
                             return (
-                                <div className="space-y-4">
-                                    {/* Detailed Header */}
+                                <div className="space-y-4 max-w-4xl mx-auto">
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center gap-3">
                                             <div
-                                                className="w-4 h-4 rounded-full shadow-sm"
+                                                className="w-3 h-3 rounded-full shadow-sm"
                                                 style={{ backgroundColor: slice.fill }}
                                             />
                                             <div>
-                                                <h3 className="text-xl font-bold">{slice.name}</h3>
-                                                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                                                    <span className="font-mono bg-muted px-1.5 rounded">{formatTime(slice.start)} - {formatTime(slice.end)}</span>
+                                                <h3 className="text-lg font-bold flex items-center gap-2">
+                                                    {slice.name}
+                                                    {slice.type === 'sleep' && <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full">Sleep</span>}
+                                                </h3>
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                                    <span className="font-mono bg-muted/50 px-1.5 rounded">{formatTime(slice.start)} - {formatTime(slice.end)}</span>
                                                     <span>•</span>
                                                     <span>{slice.category}</span>
-                                                    {slice.type === 'sleep' && <span>• 😴 Sleep</span>}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {isSession && slice.originalLog?.taskId && (
-                                            <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2">
+                                            {isSession && slice.originalLog?.taskId && (
                                                 <Button
                                                     variant={isEditing ? "default" : "outline"}
                                                     size="sm"
                                                     onClick={(e) => handleEditToggle(e, expandedSliceIndex)}
-                                                    className="gap-2"
+                                                    className="gap-2 h-8"
                                                 >
-                                                    {isEditing ? (
-                                                        <>
-                                                            <Check className="w-3 h-3" /> Done
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Edit2 className="w-3 h-3" /> Edit Notes
-                                                        </>
-                                                    )}
+                                                    {isEditing ? <Check className="w-3 h-3" /> : <Edit2 className="w-3 h-3" />}
+                                                    {isEditing ? "Done" : "Edit Notes"}
                                                 </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => setExpandedSliceIndex(null)}>
-                                                    <Minimize2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                        )}
-                                        {!isSession && (
-                                            <Button variant="ghost" size="icon" onClick={() => setExpandedSliceIndex(null)}>
+                                            )}
+                                            <Button variant="ghost" size="sm" onClick={() => setExpandedSliceIndex(null)} className="h-8 w-8 p-0">
                                                 <Minimize2 className="w-4 h-4" />
                                             </Button>
-                                        )}
+                                        </div>
                                     </div>
 
                                     {/* Description / Rich Content */}
                                     {isSession && (
-                                        <div className="mt-4 pt-4 border-t border-border/50">
-                                            <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-2">
-                                                <Info className="w-3 h-3" /> Description & Notes
-                                            </h4>
-
-                                            {/* Editable Rich Content */}
-                                            <div className={cn("rounded-md", isEditing ? "ring-1 ring-primary/20" : "")}>
+                                        <div className={cn("transition-all", isEditing ? "mt-2" : "mt-0")}>
+                                            <div className={cn("rounded-md bg-muted/10", isEditing ? "ring-1 ring-primary/20 bg-background" : "")}>
                                                 <RichEditor
                                                     initialContent={slice.originalLog?.richContent}
                                                     editable={isEditing}
@@ -266,15 +296,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                                             onUpdateSession(slice.originalLog.originalSessionId, content);
                                                         }
                                                     }}
-                                                    className={isEditing ? "min-h-[150px] p-2" : "py-2 pointer-events-none"}
+                                                    className={isEditing ? "min-h-[100px] p-3 text-sm" : "py-2 text-sm text-foreground/80 pointer-events-none"}
                                                 />
                                             </div>
-
-                                            {isEditing && (
-                                                <p className="text-xs text-muted-foreground mt-2 text-right">
-                                                    Changes saved automatically
-                                                </p>
-                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -283,14 +307,6 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {/* Legend / Instructions when nothing selected */}
-            {expandedSliceIndex === null && (
-                <div className="text-center text-sm text-muted-foreground py-4 opacity-50">
-                    Click on a timeline block to view details and edit notes.
-                </div>
-            )}
         </div>
     );
 };
-
