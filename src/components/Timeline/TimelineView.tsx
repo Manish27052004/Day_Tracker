@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { RichEditor } from './RichEditor';
@@ -23,11 +24,23 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
     // Zoom State: 1 = 100% width, 2 = 200%, etc.
     const [zoomLevel, setZoomLevel] = useState(1);
+    const [isFullScreen, setIsFullScreen] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
     // Timeline Configuration
     const TOTAL_MINUTES = 24 * 60; // 1440 minutes
     const MIN_WIDTH_PX = 1800; // Expanded base width for better breathing room
+
+    // Effect: Handle Escape key to exit full screen
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isFullScreen) {
+                setIsFullScreen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isFullScreen]);
 
     // Grouping Logic: Group Slices by "Name" (which corresponds to ViewMode logic)
     const groupedSlices = useMemo(() => {
@@ -100,12 +113,18 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     };
 
+    // ... (rest of logic)
+
     const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 4));
     const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
     const handleResetZoom = () => setZoomLevel(1);
 
-    return (
-        <div className={cn("flex flex-col h-[650px] select-none bg-background/40 rounded-xl border border-border/60 overflow-hidden shadow-sm", classNames)}>
+    const content = (
+        <div className={cn(
+            "flex flex-col select-none bg-background/40 rounded-xl border border-border/60 overflow-hidden shadow-sm transition-all duration-300 ease-in-out",
+            isFullScreen ? "fixed inset-0 z-[100] h-[100vh] w-[100vw] rounded-none border-0 bg-background" : "h-[650px] w-full relative",
+            classNames
+        )}>
 
             {/* Toolbar */}
             <div className="flex items-center justify-between p-2 border-b border-border/50 bg-[#121212]/80 backdrop-blur-sm z-40">
@@ -121,8 +140,19 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                         <RotateCcw className="w-3 h-3" />
                     </Button>
                 </div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                    Timeline View
+                <div className="flex items-center gap-2">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mr-2">
+                        Timeline View
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsFullScreen(!isFullScreen)}
+                        title={isFullScreen ? "Exit Full Screen (Esc)" : "Full Screen"}
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                    >
+                        {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </Button>
                 </div>
             </div>
 
@@ -315,4 +345,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             </AnimatePresence>
         </div>
     );
+
+    if (isFullScreen) {
+        return createPortal(content, document.body);
+    }
+
+    return content;
 };
