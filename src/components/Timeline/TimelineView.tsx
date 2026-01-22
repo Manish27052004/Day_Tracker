@@ -29,7 +29,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
     // Timeline Configuration
     const TOTAL_MINUTES = 24 * 60; // 1440 minutes
-    const MIN_WIDTH_PX = 1800; // Expanded base width for better breathing room
+    const MIN_WIDTH_PX = 3000; // Expanded base width for better breathing room
 
     // Effect: Handle Escape key to exit full screen
     React.useEffect(() => {
@@ -88,7 +88,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     };
 
     // Generate Hourly Markers (0, 1, 2 ... 23)
-    const hours = Array.from({ length: 25 }, (_, i) => i);
+    const hours = Array.from({ length: 24 }, (_, i) => i);
 
     const handleExpand = (slice: TimelineSlice, globalIndex: number) => {
         if (expandedSliceIndex === globalIndex) {
@@ -127,7 +127,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         )}>
 
             {/* Toolbar */}
-            <div className="flex items-center justify-between p-2 border-b border-border/50 bg-[#121212]/80 backdrop-blur-sm z-40">
+            <div className="flex items-center justify-between p-2 border-b border-border/50 bg-card/80 backdrop-blur-sm z-40">
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" size="sm" onClick={handleZoomOut} disabled={zoomLevel <= 1} title="Zoom Out" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
                         <ZoomOut className="w-4 h-4" />
@@ -157,13 +157,13 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
             </div>
 
             {/* RESTART LAYOUT: CSS Grid for 2D Scrolling */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-[#09090b]">
+            <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-card">
                 <div className="min-w-full inline-block">
                     <div className="flex">
                         {/* Column 1: Sidebar (Sticky Left) */}
-                        <div className="sticky left-0 z-30 w-[200px] shrink-0 bg-[#0a0a0a] border-r border-border/40 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.8)]">
+                        <div className="sticky left-0 z-30 w-[200px] shrink-0 bg-card border-r border-border/40 shadow-[4px_0_12px_-4px_rgba(0,0,0,0.8)]">
                             {/* Corner */}
-                            <div className="h-9 border-b border-border/40 bg-[#121212] flex items-center px-4">
+                            <div className="h-9 border-b border-border/40 bg-muted/20 flex items-center px-4">
                                 <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">Type</span>
                             </div>
                             {/* Row Labels */}
@@ -177,36 +177,59 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                         </div>
 
                         {/* Column 2: Timeline Track (Scrolls Horizontally) */}
-                        <div className="flex-1 overflow-x-hidden" style={{ width: `${zoomLevel * 100}%`, minWidth: MIN_WIDTH_PX }}>
+                        <div className="flex-1 overflow-x-hidden relative" style={{ width: `${zoomLevel * 100}%`, minWidth: '3000px' }}>
                             {/* Sticky Header (Time Axis) */}
-                            <div className="sticky top-0 z-20 h-9 bg-[#0c0c0c] border-b border-border/40 flex relative shadow-sm">
+                            <div className="sticky top-0 z-20 h-9 bg-card border-b border-border/40 grid grid-cols-[repeat(24,1fr)] shadow-sm">
                                 {hours.map((hour) => (
-                                    <div key={hour} className="flex-1 border-r border-border/5 relative h-full group/time">
-                                        <span className="absolute top-2 left-1 text-[10px] text-muted-foreground/40 font-mono group-hover/time:text-muted-foreground transition-colors">
+                                    <div key={hour} className="border-r border-border/10 relative h-full group/time">
+                                        <span className="absolute top-2 left-1 text-[10px] text-muted-foreground/40 font-mono group-hover/time:text-muted-foreground transition-colors select-none">
                                             {hour}:00
                                         </span>
+                                        {/* Minute Ticks */}
+                                        <div className="absolute bottom-0 left-0 w-full h-1.5 pointer-events-none">
+                                            {/* 15 min */}
+                                            <div className="absolute bottom-0 h-full w-px bg-border/20" style={{ left: '25%' }} />
+                                            {/* 30 min (Longer/Darker) */}
+                                            <div className="absolute bottom-0 h-full w-px bg-border/40" style={{ left: '50%', height: '120%' }} />
+                                            {/* 45 min */}
+                                            <div className="absolute bottom-0 h-full w-px bg-border/20" style={{ left: '75%' }} />
+                                        </div>
                                     </div>
                                 ))}
                             </div>
 
                             {/* Timeline Rows */}
-                            <div className="flex flex-col pb-4 relative">
-                                {/* Grid Lines Background */}
-                                <div className="absolute inset-0 flex pointer-events-none">
-                                    {hours.map((hour) => (
-                                        <div key={hour} className="flex-1 border-r border-dashed border-border/5 relative h-full" />
-                                    ))}
+                            <div className="flex flex-col pb-4 relative min-h-[500px]">
+                                {/* Global Background Grid (Fixed Minutes) */}
+                                <div className="absolute inset-0 grid grid-cols-[repeat(1440,1fr)] pointer-events-none z-0">
+                                    <div className="col-span-full h-full w-full"
+                                        style={{
+                                            backgroundImage: `
+                                                 linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),
+                                                 linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+                                                 linear-gradient(to right, rgba(255,255,255,0.01) 1px, transparent 1px)
+                                             `,
+                                            backgroundSize: `
+                                                 ${100 / 24}% 100%, 
+                                                 ${100 / 96}% 100%,
+                                                 ${100 / 1440}% 100%
+                                             `
+                                        }}
+                                    />
                                 </div>
 
                                 {groupedSlices.map((group) => (
-                                    <div key={group.name} className="h-14 border-b border-border/5 last:border-0 relative w-full hover:bg-white/[0.01] transition-colors">
+                                    <div key={group.name} className="h-14 border-b border-border/5 last:border-0 relative w-full hover:bg-white/[0.01] transition-colors grid grid-cols-[repeat(1440,1fr)]">
 
-                                        <TooltipProvider delayDuration={100}>
+                                        <TooltipProvider delayDuration={0}>
                                             {group.slices.map((slice, i) => {
                                                 const globalIndex = slices.findIndex(s => s === slice);
-
                                                 const isSelected = expandedSliceIndex === globalIndex;
-                                                const style = getPositionStyle(slice.start, slice.end);
+                                                const startMins = getMinutesFromStart(slice.start);
+                                                const endMins = getMinutesFromStart(slice.end);
+                                                let duration = endMins - startMins;
+                                                if (duration <= 0) duration += TOTAL_MINUTES;
+
                                                 const isUntracked = slice.type === 'untracked';
                                                 const isSleep = slice.type === 'sleep';
 
@@ -215,7 +238,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                                         <TooltipTrigger asChild>
                                                             <motion.div
                                                                 className={cn(
-                                                                    "absolute top-3 bottom-3 rounded-md border text-[10px] font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all duration-200",
+                                                                    "rounded-md border text-[10px] font-medium flex items-center justify-center overflow-hidden cursor-pointer transition-all duration-200 relative my-2 mx-[1px]",
                                                                     isSelected ? "z-30 ring-2 ring-primary/70 ring-offset-1 ring-offset-background shadow-lg scale-[1.02]" : "z-10 hover:z-20",
                                                                     !isSelected && !isUntracked && !isSleep && "hover:brightness-110 hover:shadow-md hover:scale-[1.01] hover:border-white/20",
                                                                     isUntracked
@@ -224,9 +247,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                                                     isSleep && "bg-indigo-950/20 border-indigo-500/10 text-indigo-300/50"
                                                                 )}
                                                                 style={{
-                                                                    left: style.left,
-                                                                    width: style.width,
-                                                                    minWidth: '4px',
+                                                                    gridColumn: `${startMins + 1} / span ${duration}`,
                                                                     backgroundColor: (isUntracked || isSleep) ? undefined : slice.fill,
                                                                     opacity: isSleep ? 1 : (isUntracked ? undefined : 1)
                                                                 }}
@@ -235,14 +256,15 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                                                                 animate={{ opacity: 1, scaleX: 1 }}
                                                                 transition={{ delay: i * 0.01, duration: 0.3 }}
                                                             >
-                                                                <div className="truncate px-1 text-center w-full drop-shadow-sm">
-                                                                    {zoomLevel > 1.5 && parseFloat(style.width) * zoomLevel > 30 && (
+                                                                <div className="truncate px-1 text-center w-full drop-shadow-sm pointer-events-none select-none">
+                                                                    {/* Show name if wide enough */}
+                                                                    {(zoomLevel * duration) > 40 && (
                                                                         <span className={cn(isSleep && "italic text-xs")}>{slice.name}</span>
                                                                     )}
                                                                 </div>
                                                             </motion.div>
                                                         </TooltipTrigger>
-                                                        <TooltipContent className="bg-[#121212] border-border text-white shadow-xl" sideOffset={5}>
+                                                        <TooltipContent className="bg-popover border-border text-popover-foreground shadow-xl" sideOffset={5}>
                                                             <div className="text-center">
                                                                 <p className="font-bold text-sm mb-1">{slice.name}</p>
                                                                 <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground/80 font-mono bg-muted/20 rounded px-2 py-1">
