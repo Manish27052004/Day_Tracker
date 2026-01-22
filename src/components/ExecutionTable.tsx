@@ -473,6 +473,22 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
         </Button>
       </div>
 
+      {/* Add Session Button (MOVED TO TOP) */}
+      <motion.div
+        className="p-3 bg-gradient-to-r from-primary/5 to-transparent border-b border-primary/10 flex gap-3 items-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <Button
+          variant="secondary"
+          onClick={() => { addSession(); }}
+          className="flex-1 justify-center font-medium shadow-sm hover:translate-y-[-1px] transition-all active:translate-y-[0px] h-10"
+        >
+          <Plus className="h-4 w-4 mr-2 text-primary" />
+          Add Session
+        </Button>
+      </motion.div>
+
       {/* Table Content */}
       <div className="flex-1 overflow-auto custom-scrollbar relative">
         <table className="w-full border-collapse min-w-max">
@@ -647,20 +663,7 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
         </table>
       </div>
 
-      <motion.div
-        className="p-3 bg-gradient-to-r from-primary/5 to-transparent border-t border-primary/10 flex gap-3 items-center"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        <Button
-          variant="secondary"
-          onClick={() => { addSession(); }}
-          className="flex-1 justify-center font-medium shadow-sm hover:translate-y-[-1px] transition-all active:translate-y-[0px] h-10"
-        >
-          <Plus className="h-4 w-4 mr-2 text-primary" />
-          Add Session
-        </Button>
-      </motion.div>
+
 
       <SettingsDialog
         open={settingsOpen}

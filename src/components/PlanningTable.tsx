@@ -472,6 +472,30 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: 0.3 }}
     >
+      {/* Add Task Button with Template Dropdown (MOVED TO TOP) */}
+      <motion.div
+        className="p-3 border-b border-dashed border-border/60 flex gap-2 items-center opacity-90 hover:opacity-100 transition-opacity"
+      >
+        <Button
+          variant="ghost"
+          onClick={() => addTask()}
+          className="flex-1 justify-start text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-dashed border-transparent hover:border-border/50 h-9"
+        >
+          <Plus className="h-4 w-4 mr-2 opacity-50" />
+          Add task...
+        </Button>
+        <TemplateDropdown onTemplateSelect={handleTemplateSelect} />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setSettingsOpen(true)}
+          title="Settings"
+          className="h-9 w-9 text-muted-foreground hover:text-foreground"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      </motion.div>
+
       {/* Mobile Card View */}
       {isMobile ? (
         <div className="p-4 space-y-4">
@@ -783,32 +807,9 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
         </div>
       )}
 
-      {/* Add Task Button with Template Dropdown */}
-      <motion.div
-        className="p-3 border-t border-dashed border-border/60 flex gap-2 items-center opacity-80 hover:opacity-100 transition-opacity"
-      >
-        <Button
-          variant="ghost"
-          onClick={() => addTask()}
-          className="flex-1 justify-start text-muted-foreground hover:text-foreground hover:bg-muted/30 border border-dashed border-transparent hover:border-border/50 h-9"
-        >
-          <Plus className="h-4 w-4 mr-2 opacity-50" />
-          Add task...
-        </Button>
-        <TemplateDropdown onTemplateSelect={handleTemplateSelect} />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSettingsOpen(true)}
-          title="Settings"
-          className="h-9 w-9 text-muted-foreground hover:text-foreground"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-      </motion.div>
 
       {/* Repeat Schedule Dialog */}
-      <RepeatScheduleDialog
+      < RepeatScheduleDialog
         open={repeatDialogOpen}
         onOpenChange={setRepeatDialogOpen}
         task={selectedTask}
@@ -819,7 +820,7 @@ const PlanningTable = ({ selectedDate }: PlanningTableProps) => {
         onOpenChange={setSettingsOpen}
         defaultTab="priorities"
       />
-    </motion.div>
+    </motion.div >
   );
 };
 export default PlanningTable;

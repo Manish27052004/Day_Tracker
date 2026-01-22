@@ -96,10 +96,19 @@ const Index = () => {
   */
   // === END: SyncManager Integration ===
 
-  // Fetch or create sleep entry for the selected date
   const sleepEntry = useLiveQuery(
     () => db.sleepEntries.where('date').equals(dateString).first(),
     [dateString]
+  );
+
+  // 🔥 NEW: Fetch previous day's sleep entry to link Bed Time
+  const prevDate = new Date(selectedDate);
+  prevDate.setDate(prevDate.getDate() - 1);
+  const prevDateString = formatToIST(prevDate);
+
+  const prevSleepEntry = useLiveQuery(
+    () => db.sleepEntries.where('date').equals(prevDateString).first(),
+    [prevDateString]
   );
 
   const handleWakeUpChange = async (time: string) => {
@@ -153,6 +162,7 @@ const Index = () => {
             selectedDate={selectedDate}
             wakeUpTime={sleepEntry?.wakeUpTime}
             bedTime={sleepEntry?.bedTime}
+            previousBedTime={prevSleepEntry?.bedTime}
             dayStartHour={dayStartHour}
           />
         );

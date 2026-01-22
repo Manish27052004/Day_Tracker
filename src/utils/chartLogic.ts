@@ -1,4 +1,4 @@
-import { parse, addHours, addDays, isWithinInterval, differenceInMinutes, isBefore, isAfter, startOfDay } from 'date-fns';
+import { parse, addHours, addDays, subDays, isWithinInterval, differenceInMinutes, isBefore, isAfter, startOfDay } from 'date-fns';
 
 export type ViewMode = 'SESSION' | 'CATEGORY' | 'SUBCATEGORY';
 
@@ -82,6 +82,7 @@ interface GenerateChartDataParams {
     currentDate: Date;
     wakeTime?: string;
     bedTime?: string;
+    previousBedTime?: string; // 🔥 NEW
     viewMode: ViewMode;
     categoryTypeMap?: Record<string, string>;
     categoryColors?: Record<string, string>;
@@ -125,6 +126,7 @@ export function generateTimelineSlices({
     currentDate,
     wakeTime,
     bedTime,
+    previousBedTime,
     dayStartHour = 0,
 }: Omit<GenerateChartDataParams, 'viewMode' | 'categoryColors' | 'categoryTypeMap'>): TimelineSlice[] {
     const chartStart = startOfDay(currentDate);
@@ -137,10 +139,51 @@ export function generateTimelineSlices({
     try {
         if (wakeTime) {
             const wakeDateTime = parseTimeWithLogicalOffset(wakeTime, currentDate, dayStartHour);
+            let sleepStart = chartStart;
+            let originalStart = undefined;
+
+            // 🔥 Use Previous Bed Time if available
+            if (previousBedTime) {
+                // Determine absolute date of previous bed time (Likely Yesterday or Early Today)
+                // Since previousBedTime usually means "Last Night", it's ~ Yesterday relative to Logical Date
+                // We use parseTimeWithLogicalOffset based on (currentDate - 1 day)
+                const prevDate = subDays(currentDate, 1);
+                const prevBedDateTime = parseTimeWithLogicalOffset(previousBedTime, prevDate, dayStartHour);
+
+                // If the previous bed time is reasonably before wake time
+                if (isBefore(prevBedDateTime, wakeDateTime)) {
+                    originalStart = prevBedDateTime;
+                }
+            }
+
             if (isAfter(wakeDateTime, chartStart) && isBefore(wakeDateTime, chartEnd)) {
-                slices.push({ name: 'Sleep', category: 'Sleep', start: chartStart, end: wakeDateTime, type: 'sleep' });
+                slices.push({
+                    name: 'Sleep',
+                    category: 'Sleep',
+                    start: chartStart,
+                    end: wakeDateTime,
+                    type: 'sleep',
+                    // Pass metadata for tooltip
+                    originalLog: originalStart ? {
+                        startTime: previousBedTime!,
+                        endTime: wakeTime,
+                        category: 'Sleep',
+                        customName: 'Sleep'
+                    } as any : undefined
+                });
             } else if (isAfter(wakeDateTime, chartEnd)) {
-                slices.push({ name: 'Sleep', category: 'Sleep', start: chartStart, end: chartEnd, type: 'sleep' });
+                slices.push({
+                    name: 'Sleep',
+                    category: 'Sleep',
+                    start: chartStart,
+                    end: chartEnd,
+                    type: 'sleep',
+                    originalLog: originalStart ? {
+                        startTime: previousBedTime!,
+                        endTime: wakeTime,
+                        category: 'Sleep'
+                    } as any : undefined
+                });
             }
         }
 
@@ -239,6 +282,7 @@ export function generateChartData({
     currentDate,
     wakeTime,
     bedTime,
+    previousBedTime, // 🔥 NEW: Fixed destructuring
     viewMode,
     categoryColors = {},
     categoryTypeMap = {},
@@ -246,7 +290,7 @@ export function generateChartData({
 }: GenerateChartDataParams & { dayStartHour?: number }): ChartSlice[] {
 
     // 1. Get Normalized Continuous Slices
-    const timelineSlices = generateTimelineSlices({ logs, currentDate, wakeTime, bedTime, dayStartHour });
+    const timelineSlices = generateTimelineSlices({ logs, currentDate, wakeTime, bedTime, previousBedTime, dayStartHour });
 
     // 2. Aggregate for Chart
     const aggregated = new Map<string, number>();

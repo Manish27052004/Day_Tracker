@@ -15,6 +15,7 @@ interface DailyBreakdownProps {
     selectedDate: Date;
     wakeUpTime?: string;
     bedTime?: string;
+    previousBedTime?: string; // 🔥 NEW
     dayStartHour?: number;
 }
 
@@ -33,7 +34,7 @@ const DEFAULT_COLORS: Record<string, string> = {
     'Uncategorized': '#9ca3af', // fallback
 };
 
-const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }: DailyBreakdownProps) => {
+const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, previousBedTime, dayStartHour = 0 }: DailyBreakdownProps) => {
     const { user } = useAuth();
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
         return (localStorage.getItem('daily_breakdown_view_mode') as ViewMode) || 'CATEGORY';
@@ -287,6 +288,7 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                 currentDate: selectedDate,
                 wakeTime: wakeUpTime,
                 bedTime: bedTime,
+                previousBedTime: previousBedTime, // 🔥 Pass it here too
                 viewMode,
                 categoryColors,
                 categoryTypeMap,
