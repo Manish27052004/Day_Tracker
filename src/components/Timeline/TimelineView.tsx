@@ -12,12 +12,14 @@ export interface TimelineViewProps {
     slices: TimelineSlice[];
     onUpdateSession?: (id: number, content: string) => Promise<void>;
     classNames?: string;
+    dayStartHour?: number;
 }
 
 export const TimelineView: React.FC<TimelineViewProps> = ({
     slices,
     onUpdateSession,
-    classNames
+    classNames,
+    dayStartHour = 0
 }) => {
     const [expandedSliceIndex, setExpandedSliceIndex] = useState<number | null>(null);
     const [editingSliceIndex, setEditingSliceIndex] = useState<number | null>(null);
@@ -68,9 +70,13 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
     }, [slices]);
 
 
-    // Helper: Convert Date to minutes from start of day (00:00)
+    // Helper: Convert Date to minutes from start of logical day
     const getMinutesFromStart = (date: Date) => {
-        return date.getHours() * 60 + date.getMinutes();
+        let mins = date.getHours() * 60 + date.getMinutes();
+        const offset = dayStartHour * 60;
+        mins -= offset;
+        if (mins < 0) mins += TOTAL_MINUTES;
+        return mins;
     };
 
     // Helper: Calculate position and width as percentage
@@ -87,8 +93,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
         return { left: `${left}%`, width: `${width}%` };
     };
 
-    // Generate Hourly Markers (0, 1, 2 ... 23)
-    const hours = Array.from({ length: 24 }, (_, i) => i);
+    // Generate Hourly Markers (0, 1, 2 ... 23) but rotated by dayStartHour
+    const hours = Array.from({ length: 24 }, (_, i) => (i + dayStartHour) % 24);
 
     const handleExpand = (slice: TimelineSlice, globalIndex: number) => {
         if (expandedSliceIndex === globalIndex) {

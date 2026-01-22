@@ -427,6 +427,7 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, dayStartHour = 0 }:
                             <TimelineView
                                 slices={timelineSlices}
                                 onUpdateSession={handleUpdateRichContent}
+                                dayStartHour={dayStartHour}
                             />
                         </motion.div>
                     ) : (
