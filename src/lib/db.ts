@@ -25,7 +25,7 @@ export interface Session {
   taskId: number | null;
   customName: string; // custom session name when not linked to task
   category: string | null;
-  categoryType: 'work' | 'life' | null;
+  categoryType: 'work' | 'life' | 'untracked' | null;
   startTime: string; // HH:mm format
   endTime: string;
   description: string;
@@ -89,7 +89,7 @@ export interface Priority {
 export interface Category {
   id?: number;
   name: string;
-  type: 'work' | 'life';
+  type: 'work' | 'life' | 'untracked';
   color: string;
   order: number;
 }

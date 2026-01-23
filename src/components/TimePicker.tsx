@@ -57,9 +57,13 @@ const TimePicker = ({ value, onChange, className, placeholder = 'Select time' }:
   const [mode, setMode] = useState<'hours' | 'minutes'>('hours');
 
   // Internal form state
-  const [tempHour, setTempHour] = useState(9);
+  const [tempHour, setTempHour] = useState(() => {
+    // Fix: Default to current hour to prevent "9 AM default" glitch
+    const h = new Date().getHours();
+    return h === 0 ? 12 : h > 12 ? h - 12 : h;
+  });
   const [tempMinute, setTempMinute] = useState(0);
-  const [tempPeriod, setTempPeriod] = useState<'AM' | 'PM'>('AM');
+  const [tempPeriod, setTempPeriod] = useState<'AM' | 'PM'>(() => new Date().getHours() >= 12 ? 'PM' : 'AM');
 
   // Motion Values for smooth rotation
   const rotateMv = useMotionValue(0);

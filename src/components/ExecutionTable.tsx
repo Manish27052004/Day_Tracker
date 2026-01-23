@@ -407,6 +407,7 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
   };
 
   const getCategoryColor = (categoryName: string) => {
+    if (categoryName === 'Untracked') return 'text-muted-foreground italic';
     const category = categories?.find(c => c.name === categoryName);
     // Try to match partial for legacy support or just return default
     if (!category) {
@@ -586,6 +587,14 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
                                 ))}
                               </div>
                             ))}
+                            <div key="untracked">
+                              <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase capitalize mt-2">
+                                Other
+                              </div>
+                              <SelectItem value="untracked:Untracked ">
+                                <span className="text-muted-foreground italic">Untracked</span>
+                              </SelectItem>
+                            </div>
                           </SelectContent>
                         </Select>
                       </div>

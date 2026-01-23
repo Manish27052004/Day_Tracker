@@ -294,6 +294,7 @@ export function generateChartData({
 
     // 2. Aggregate for Chart
     const aggregated = new Map<string, number>();
+    const keyCategoryMap = new Map<string, string>(); // Track category for coloring
 
     for (const slice of timelineSlices) {
         let key: string;
@@ -316,7 +317,11 @@ export function generateChartData({
                     key = slice.name;
                     break;
                 case 'CATEGORY':
-                    key = (categoryTypeMap[slice.category] || 'WORK').toUpperCase();
+                    if (slice.category === 'Untracked') {
+                        key = 'Untracked';
+                    } else {
+                        key = (categoryTypeMap[slice.category] || 'WORK').toUpperCase();
+                    }
                     break;
                 default: // SUBCATEGORY
                     key = slice.category;
@@ -324,6 +329,7 @@ export function generateChartData({
         }
 
         aggregated.set(key, (aggregated.get(key) || 0) + duration);
+        if (slice.category) keyCategoryMap.set(key, slice.category);
     }
 
     // 3. Build Chart Data
@@ -332,7 +338,9 @@ export function generateChartData({
 
     for (const [name, value] of aggregated.entries()) {
         let color: string;
-        if (name === 'Untracked') {
+        const originalCategory = keyCategoryMap.get(name);
+
+        if (name === 'Untracked' || originalCategory === 'Untracked') {
             color = COLORS.Untracked;
         } else if (viewMode === 'SESSION' && name !== 'Sleep') {
             color = getSessionColor(name, sessionIndex++);

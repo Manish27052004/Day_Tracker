@@ -303,7 +303,6 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, previousBedTime, da
     // Calculate total tracked time
     const totalTrackedMinutes = useMemo(() => {
         return chartData
-            .filter((slice) => slice.name !== 'Untracked')
             .reduce((sum, slice) => sum + slice.value, 0);
     }, [chartData]);
 
