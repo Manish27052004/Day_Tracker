@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '@/lib/supabase';
@@ -56,81 +56,117 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, previousBedTime, da
     const dateString = getDateString(selectedDate);
 
     // Fetch All Data from Supabase
-    useEffect(() => {
-        const fetchData = async () => {
-            if (!user) return;
-            setLoading(true);
+    const fetchData = useCallback(async (silent = false) => {
+        if (!user) return;
+        if (!silent) setLoading(true);
 
-            try {
-                // 1. Fetch Sessions
-                const { data: sessionsData } = await supabase
-                    .from('sessions')
-                    .select('*')
-                    .eq('date', dateString)
-                    .eq('user_id', user.id);
+        try {
+            // 1. Fetch Sessions
+            const { data: sessionsData } = await supabase
+                .from('sessions')
+                .select('*')
+                .eq('date', dateString)
+                .eq('user_id', user.id);
 
-                // 2. Fetch Tasks (for naming)
-                const { data: tasksData } = await supabase
-                    .from('tasks')
-                    .select('*')
-                    .eq('date', dateString)
-                    .eq('user_id', user.id);
+            // 2. Fetch Tasks (for naming)
+            const { data: tasksData } = await supabase
+                .from('tasks')
+                .select('*')
+                .eq('date', dateString)
+                .eq('user_id', user.id);
 
-                // 3. Fetch Categories (Execution)
-                const { data: categoriesData } = await supabase
-                    .from('categories')
-                    .select('*')
-                    .eq('user_id', user.id);
+            // 3. Fetch Categories (Execution)
+            const { data: categoriesData } = await supabase
+                .from('categories')
+                .select('*')
+                .eq('user_id', user.id);
 
-                // 4. Fetch Category Types (Main Types for Colors)
-                const { data: typesData } = await supabase
-                    .from('category_types')
-                    .select('*')
-                    .eq('user_id', user.id);
+            // 4. Fetch Category Types (Main Types for Colors)
+            const { data: typesData } = await supabase
+                .from('category_types')
+                .select('*')
+                .eq('user_id', user.id);
 
-                if (sessionsData) {
-                    setSessions(sessionsData.map(s => ({
-                        id: s.id,
-                        date: s.date,
-                        taskId: s.task_id,
-                        customName: s.custom_name,
-                        category: s.category,
-                        categoryType: s.category_type,
-                        startTime: s.start_time,
-                        endTime: s.end_time,
-                        description: s.description,
-                        richContent: s.rich_content,
-                        createdAt: new Date(s.created_at),
-                        syncStatus: 'synced',
-                        userId: s.user_id
-                    })));
-                } else {
-                    setSessions([]);
-                }
-
-                if (tasksData) setTasks(tasksData.map(t => ({
-                    ...t,
-                    targetTime: t.target_time,
-                    createdAt: new Date(t.created_at),
-                    updatedAt: new Date(t.updated_at)
-                })) as Task[]);
-                else setTasks([]);
-
-                if (categoriesData) setCategories(categoriesData as Category[]);
-                else setCategories([]);
-
-                if (typesData) setCategoryTypes(typesData);
-                else setCategoryTypes([]);
-
-            } catch (error) {
-                console.error("Error fetching breakdown data:", error);
-            } finally {
-                setLoading(false);
+            if (sessionsData) {
+                setSessions(sessionsData.map(s => ({
+                    id: s.id,
+                    date: s.date,
+                    taskId: s.task_id,
+                    customName: s.custom_name,
+                    category: s.category,
+                    categoryType: s.category_type,
+                    startTime: s.start_time,
+                    endTime: s.end_time,
+                    description: s.description,
+                    richContent: s.rich_content,
+                    createdAt: new Date(s.created_at),
+                    syncStatus: 'synced',
+                    userId: s.user_id
+                })));
+            } else {
+                setSessions([]);
             }
-        };
 
-        fetchData();
+            if (tasksData) setTasks(tasksData.map(t => ({
+                ...t,
+                targetTime: t.target_time,
+                createdAt: new Date(t.created_at),
+                updatedAt: new Date(t.updated_at)
+            })) as Task[]);
+            else setTasks([]);
+
+            if (categoriesData) setCategories(categoriesData as Category[]);
+            else setCategories([]);
+
+            if (typesData) setCategoryTypes(typesData);
+            else setCategoryTypes([]);
+
+        } catch (error) {
+            console.error("Error fetching breakdown data:", error);
+        } finally {
+            if (!silent) setLoading(false);
+        }
     }, [dateString, user]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    // 🔥 Realtime Updates
+    useEffect(() => {
+        if (!user) return;
+
+        // Unique channel per user/date context to avoid collisions if multiple tabs open
+        const channelName = `daily-breakdown-${user.id}-${dateString}`;
+
+        const channel = supabase.channel(channelName)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'sessions',
+                    // REMOVED FILTER: Explicit date filter might be failing if date formats mismatch or RLS weirdness.
+                    // We listen to ALL session changes for this user (RLS handles user filter) and filter client-side.
+                },
+                (payload: any) => {
+                    // Client-side Filter
+                    const newDate = payload.new?.date;
+                    const oldDate = payload.old?.date;
+
+                    // Check if the change is relevant to the currently selected date
+                    if (newDate === dateString || oldDate === dateString) {
+                        console.log('🔄 Realtime update caught: Refreshing breakdown...', payload);
+                        fetchData(true); // Silent refresh
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [dateString, user, fetchData]);
 
 
     // Build color map from categories AND category_types
