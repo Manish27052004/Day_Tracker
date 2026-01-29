@@ -150,15 +150,12 @@ const DailyBreakdown = ({ selectedDate, wakeUpTime, bedTime, previousBedTime, da
                     // We listen to ALL session changes for this user (RLS handles user filter) and filter client-side.
                 },
                 (payload: any) => {
-                    // Client-side Filter
-                    const newDate = payload.new?.date;
-                    const oldDate = payload.old?.date;
-
-                    // Check if the change is relevant to the currently selected date
-                    if (newDate === dateString || oldDate === dateString) {
-                        console.log('🔄 Realtime update caught: Refreshing breakdown...', payload);
-                        fetchData(true); // Silent refresh
-                    }
+                    // 🛡️ Aggressive Refresh Strategy
+                    // Since default RLS policies prevent REPLICA IDENTITY FULL (no old.date on DELETE),
+                    // and we only receive events for THIS user (RLS),
+                    // we safer to refresh on ANY change to the sessions table.
+                    console.log('🔄 Realtime update caught:', payload.eventType);
+                    fetchData(true);
                 }
             )
             .subscribe();

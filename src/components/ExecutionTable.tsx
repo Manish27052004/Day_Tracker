@@ -260,8 +260,7 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
       defaultStart = overrideStartTime;
     } else if (lastSession) {
       defaultStart = lastSession.endTime;
-    } else if (wakeUpTime) {
-      defaultStart = wakeUpTime;
+      // Removed wakeUpTime fallback: Users prefer "Now" as default even for first session to avoid "9 AM" glitch
     }
 
     // End time is always "now" (or same as start if start > now? No, user said "End time also same with time.now()")
