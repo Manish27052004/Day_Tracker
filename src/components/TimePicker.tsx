@@ -56,14 +56,30 @@ const TimePicker = ({ value, onChange, className, placeholder = 'Select time' }:
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'hours' | 'minutes'>('hours');
 
-  // Internal form state
+  // Internal form state - Initialize from value prop or current time
   const [tempHour, setTempHour] = useState(() => {
+    if (value) {
+      const p = parseTime(value);
+      return p.hour;
+    }
     // Fix: Default to current hour to prevent "9 AM default" glitch
     const h = new Date().getHours();
     return h === 0 ? 12 : h > 12 ? h - 12 : h;
   });
-  const [tempMinute, setTempMinute] = useState(0);
-  const [tempPeriod, setTempPeriod] = useState<'AM' | 'PM'>(() => new Date().getHours() >= 12 ? 'PM' : 'AM');
+  const [tempMinute, setTempMinute] = useState(() => {
+    if (value) {
+      const p = parseTime(value);
+      return p.minute;
+    }
+    return new Date().getMinutes();
+  });
+  const [tempPeriod, setTempPeriod] = useState<'AM' | 'PM'>(() => {
+    if (value) {
+      const p = parseTime(value);
+      return p.period;
+    }
+    return new Date().getHours() >= 12 ? 'PM' : 'AM';
+  });
 
   // Motion Values for smooth rotation
   const rotateMv = useMotionValue(0);
@@ -73,7 +89,14 @@ const TimePicker = ({ value, onChange, className, placeholder = 'Select time' }:
   const dialRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Sync from props when opening
+  // Initialize rotation angle on mount
+  useEffect(() => {
+    const p = parseTime(value);
+    const initialAngle = p.hour * 30;
+    rotateMv.set(initialAngle);
+  }, []); // Run only once on mount
+
+  // Sync from props when opening or value changes
   useEffect(() => {
     if (open) {
       const p = parseTime(value);
