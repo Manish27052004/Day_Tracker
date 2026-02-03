@@ -89,12 +89,12 @@ const TimePicker = ({ value, onChange, className, placeholder = 'Select time' }:
   const dialRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Initialize rotation angle on mount
+  // Initialize rotation angle on mount and when value changes
   useEffect(() => {
     const p = parseTime(value);
     const initialAngle = p.hour * 30;
     rotateMv.set(initialAngle);
-  }, []); // Run only once on mount
+  }, [value]); // Update when value prop changes
 
   // Sync from props when opening or value changes
   useEffect(() => {
