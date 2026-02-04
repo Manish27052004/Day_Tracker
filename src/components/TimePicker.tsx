@@ -89,26 +89,27 @@ const TimePicker = ({ value, onChange, className, placeholder = 'Select time' }:
   const dialRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Initialize rotation angle on mount and when value changes
+  // Sync internal state whenever value prop changes (even when closed)
   useEffect(() => {
     const p = parseTime(value);
+    setTempHour(p.hour);
+    setTempMinute(p.minute);
+    setTempPeriod(p.period);
+    // Update rotation angle to match
     const initialAngle = p.hour * 30;
     rotateMv.set(initialAngle);
-  }, [value]); // Update when value prop changes
+  }, [value]); // Runs whenever parent passes new value
 
-  // Sync from props when opening or value changes
+  // Additional sync when opening (for switching to hours mode)
   useEffect(() => {
     if (open) {
-      const p = parseTime(value);
-      setTempHour(p.hour);
-      setTempMinute(p.minute);
-      setTempPeriod(p.period);
       setMode('hours');
-      // Initial angle set (without animation usually, or set immediately)
-      const initialAngle = p.hour * 30; // hours mode default
+      // Ensure rotation is synced when opening
+      const p = parseTime(value);
+      const initialAngle = p.hour * 30;
       rotateMv.set(initialAngle);
     }
-  }, [open, value]);
+  }, [open]);
 
   // Update rotation when mode or value changes programmatically (e.g. switching views)
   useEffect(() => {
