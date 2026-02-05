@@ -244,6 +244,14 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
     const now = new Date();
     const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
+    // Get last session to auto-fill start time
+    const sortedByEnd = [...sessions].sort((a, b) => {
+      const endA = a.endTime.split(':').map(Number);
+      const endB = b.endTime.split(':').map(Number);
+      return (endA[0] * 60 + endA[1]) - (endB[0] * 60 + endB[1]);
+    });
+    const lastSession = sortedByEnd[sortedByEnd.length - 1];
+
     // Default to current time for both start and end
     let defaultStart = currentHHMM;
     let defaultEnd = currentHHMM;
@@ -251,10 +259,13 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
     // If override provided (Timeline Gap Click), use it for start time
     if (overrideStartTime) {
       defaultStart = overrideStartTime;
+    } else if (lastSession) {
+      // Restore: Default to last session's END time
+      defaultStart = lastSession.endTime;
+    } else if (wakeUpTime) {
+      // Restore: Default to Wake Up Time for the very first session
+      defaultStart = wakeUpTime;
     }
-    // Note: We removed the logic that copied lastSession.endTime to defaultStart
-    // because it was causing the "9 AM default" bug - new sessions should always
-    // default to the actual current time, not inherit old session times
 
     // Small DX improvement: if start > end (e.g. last session ended in future?), set end = start
     // But user strictly said: "End time also same with time.now()"
