@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Settings, ArrowUp, ArrowDown, ArrowUpDown, Paperclip } from 'lucide-react';
+import { Plus, Trash2, Settings, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 // CLOUD-ONLY MODE
 import { type Session, type Task, formatDuration, calculateDuration, getDateString, type Category } from '@/lib/db';
@@ -492,75 +492,32 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
 
       {/* Table Content */}
       <div className="flex-1 overflow-auto custom-scrollbar relative">
-        <table className="w-full border-collapse min-w-max">
-          <thead className="sticky top-0 z-30">
-            <tr className="bg-muted/90 backdrop-blur-sm border-b border-border shadow-sm">
-              <th className="min-w-[250px] sticky left-0 z-40 bg-background/95 backdrop-blur-sm border-r border-border px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">
-                Session
-              </th>
-              <th className="min-w-[140px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Category</th>
-              <th
-                className="min-w-[120px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap cursor-pointer hover:bg-muted/50 transition-colors group select-none"
-                onClick={toggleSort}
-                title={`Sort by Start Time (${sortOrder === 'asc' ? 'Ascending' : 'Descending'})`}
-              >
-                <div className="flex items-center justify-center gap-1">
-                  Start
-                  {sortOrder === 'asc' ? (
-                    <ArrowUp className="h-3 w-3 text-muted-foreground/70" />
-                  ) : (
-                    <ArrowDown className="h-3 w-3 text-muted-foreground/70" />
-                  )}
-                </div>
-              </th>
-              <th className="min-w-[120px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">End</th>
-              <th className="min-w-[80px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Duration</th>
-              <th className="min-w-[300px] px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Notes</th>
-              <th className="w-[50px] px-4 py-3"></th>
-            </tr>
-          </thead>
 
-          <tbody className="divide-y divide-border/50">
+        {isMobile ? (
+          <div className="flex flex-col gap-3 pb-20">
             <AnimatePresence mode="popLayout" initial={false}>
-              {sortedSessions?.map((session, index) => {
+              {sortedSessions?.map((session) => {
                 const duration = calculateDuration(session.startTime, session.endTime);
                 const selectValue = `${session.categoryType}:${session.category} `;
                 const isOverlapping = isTimeOverlapping(session.startTime, session.endTime, session.id);
 
                 return (
-                  <motion.tr
+                  <motion.div
                     key={session.id}
                     layout
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.2 }}
-                    className="hover:bg-muted/20 transition-colors group relative"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="bg-card border border-border rounded-lg p-3 shadow-sm relative overflow-hidden"
                   >
-                    {/* Session (Task Link or Custom Name) - Sticky Left 0 */}
-                    <td className="min-w-[250px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
-                      <div className="flex flex-col gap-1">
-                        <TaskComboBox
-                          tasks={tasks || []}
-                          selectedTaskId={session.taskId}
-                          customValue={session.customName}
-                          onTaskSelect={(taskId, name) => {
-                            if (taskId) updateSession(session.id!, { taskId, customName: '' });
-                            else updateSession(session.id!, { taskId: null, customName: name });
-                          }}
-                          placeholder="Select task or type custom..."
-                        />
-                        {isOverlapping && (
-                          <span className="text-[10px] text-destructive font-medium animate-pulse">
-                            ⚠️ Time overlaps with existing session
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                    {/* Left colored border indicator */}
+                    <div className={cn("absolute left-0 top-0 bottom-0 w-1",
+                      categories?.find(c => c.name === session.category)?.color.replace('text-', 'bg-') || 'bg-muted')}
+                    />
 
-                    {/* Category */}
-                    <td className="min-w-[140px] px-4 py-3">
-                      <div className="flex justify-center">
+                    {/* Header: Category & Actions */}
+                    <div className="flex justify-between items-start mb-3 pl-2">
+                      <div className="w-[140px]">
                         <Select
                           value={selectValue}
                           onValueChange={(value) => {
@@ -569,12 +526,12 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
                             updateSession(session.id!, { categoryType: type as any, category: cleanCatName });
                           }}
                         >
-                          <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-muted/50 transition-colors justify-center">
-                            <span className={cn('text-xs font-medium', getCategoryColor(session.category))}>
+                          <SelectTrigger className="h-7 border-none bg-muted/30 hover:bg-muted/50 transition-colors text-xs px-2 shadow-none">
+                            <span className={cn('font-medium truncate', getCategoryColor(session.category))}>
                               {session.category}
                             </span>
                           </SelectTrigger>
-                          <SelectContent align="center">
+                          <SelectContent>
                             {Array.from(new Set(categories.map(c => c.type))).sort().map((type) => (
                               <div key={type}>
                                 <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase capitalize mt-2 first:mt-0">
@@ -587,89 +544,266 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
                                 ))}
                               </div>
                             ))}
-                            <div key="untracked">
-                              <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase capitalize mt-2">
-                                Other
-                              </div>
-                              <SelectItem value="untracked:Untracked ">
-                                <span className="text-muted-foreground italic">Untracked</span>
-                              </SelectItem>
-                            </div>
                           </SelectContent>
                         </Select>
                       </div>
-                    </td>
 
-                    {/* Start Time */}
-                    <td className="min-w-[120px] px-4 py-3">
-                      <div className={cn("flex justify-center transition-colors", isOverlapping && "text-destructive")}>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-medium text-muted-foreground bg-secondary/50 px-2 py-1 rounded">
+                          {duration > 0 ? formatDuration(duration) : '—'}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteSession(session.id!)}
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mr-1"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Body: Task Selection */}
+                    <div className="mb-3 pl-2">
+                      <TaskComboBox
+                        tasks={tasks || []}
+                        selectedTaskId={session.taskId}
+                        customValue={session.customName}
+                        onTaskSelect={(taskId, name) => {
+                          if (taskId) updateSession(session.id!, { taskId, customName: '' });
+                          else updateSession(session.id!, { taskId: null, customName: name });
+                        }}
+                        placeholder="Select task..."
+                      />
+                      {isOverlapping && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-destructive font-medium animate-pulse">
+                          ⚠️ Time overlap
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Time Row */}
+                    <div className="flex items-center gap-2 mb-3 pl-2 bg-muted/10 p-2 rounded-md border border-border/40">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold block mb-0.5 ml-1">Start</label>
                         <TimePicker
                           value={session.startTime}
                           onChange={(time) => updateSession(session.id!, { startTime: time })}
                           placeholder="Start"
-                          className={cn(isOverlapping && "text-destructive border-destructive/50 ring-destructive/30")}
+                          className={cn("h-8 text-sm", isOverlapping && "text-destructive border-destructive/50")}
                         />
                       </div>
-                    </td>
-
-                    {/* End Time */}
-                    <td className="min-w-[120px] px-4 py-3">
-                      <div className={cn("flex justify-center transition-colors", isOverlapping && "text-destructive")}>
+                      <div className="pt-4 text-muted-foreground">
+                        <ArrowRight className="h-3 w-3" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold block mb-0.5 ml-1">End</label>
                         <TimePicker
                           value={session.endTime}
                           onChange={(time) => updateSession(session.id!, { endTime: time })}
                           placeholder="End"
-                          className={cn(isOverlapping && "text-destructive border-destructive/50 ring-destructive/30")}
+                          className={cn("h-8 text-sm", isOverlapping && "text-destructive border-destructive/50")}
                         />
                       </div>
-                    </td>
+                    </div>
 
-                    {/* Duration */}
-                    <td className="min-w-[80px] px-4 py-3">
-                      <div className="flex justify-center">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          {duration > 0 ? formatDuration(duration) : '—'}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Notes */}
-                    <td className="min-w-[300px] px-4 py-3">
+                    {/* Footer: Notes */}
+                    <div className="pl-2">
                       <DescriptionInput
                         sessionId={session.id!}
                         initialDescription={session.description || ''}
                         selectedDate={selectedDate}
                         onUpdate={updateSession}
                       />
-                      {session.richContent && session.richContent !== '' && (
-                        <div className="flex justify-end mt-1">
-                          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded-sm" title="Rich content attached">
-                            <Paperclip className="w-3 h-3" />
-                            Content
-                          </span>
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Delete */}
-                    <td className="w-[50px] px-4 py-3">
-                      <div className="flex justify-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteSession(session.id!)}
-                          className="h-7 w-7 text-muted-foreground hover:text-danger hover:bg-danger/10 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </motion.tr>
+                    </div>
+                  </motion.div>
                 );
               })}
             </AnimatePresence>
-          </tbody>
-        </table>
+
+            {/* Add Session Button for Mobile (Floating or Bottom) */}
+            <div className="h-4"></div> {/* spacer */}
+          </div>
+        ) : (
+          <table className="w-full border-collapse min-w-max">
+            <thead className="sticky top-0 z-30">
+              <tr className="bg-muted/90 backdrop-blur-sm border-b border-border shadow-sm">
+                <th className="min-w-[250px] sticky left-0 z-40 bg-background/95 backdrop-blur-sm border-r border-border px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">
+                  Session
+                </th>
+                <th className="min-w-[140px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Category</th>
+                <th
+                  className="min-w-[120px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap cursor-pointer hover:bg-muted/50 transition-colors group select-none"
+                  onClick={toggleSort}
+                  title={`Sort by Start Time (${sortOrder === 'asc' ? 'Ascending' : 'Descending'})`}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    Start
+                    {sortOrder === 'asc' ? (
+                      <ArrowUp className="h-3 w-3 text-muted-foreground/70" />
+                    ) : (
+                      <ArrowDown className="h-3 w-3 text-muted-foreground/70" />
+                    )}
+                  </div>
+                </th>
+                <th className="min-w-[120px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">End</th>
+                <th className="min-w-[80px] px-4 py-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Duration</th>
+                <th className="min-w-[300px] px-4 py-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Notes</th>
+                <th className="w-[50px] px-4 py-3"></th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-border/50">
+              <AnimatePresence mode="popLayout" initial={false}>
+                {sortedSessions?.map((session, index) => {
+                  const duration = calculateDuration(session.startTime, session.endTime);
+                  const selectValue = `${session.categoryType}:${session.category} `;
+                  const isOverlapping = isTimeOverlapping(session.startTime, session.endTime, session.id);
+
+                  return (
+                    <motion.tr
+                      key={session.id}
+                      layout
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.2 }}
+                      className="hover:bg-muted/20 transition-colors group relative"
+                    >
+                      {/* Session (Task Link or Custom Name) - Sticky Left 0 */}
+                      <td className="min-w-[250px] sticky left-0 z-20 bg-background group-hover:bg-background border-r border-border px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          <TaskComboBox
+                            tasks={tasks || []}
+                            selectedTaskId={session.taskId}
+                            customValue={session.customName}
+                            onTaskSelect={(taskId, name) => {
+                              if (taskId) updateSession(session.id!, { taskId, customName: '' });
+                              else updateSession(session.id!, { taskId: null, customName: name });
+                            }}
+                            placeholder="Select task or type custom..."
+                          />
+                          {isOverlapping && (
+                            <span className="text-[10px] text-destructive font-medium animate-pulse">
+                              ⚠️ Time overlaps with existing session
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="min-w-[140px] px-4 py-3">
+                        <div className="flex justify-center">
+                          <Select
+                            value={selectValue}
+                            onValueChange={(value) => {
+                              const [type, catName] = value.split(':');
+                              const cleanCatName = catName.trim();
+                              updateSession(session.id!, { categoryType: type as any, category: cleanCatName });
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-full border-none bg-transparent hover:bg-muted/50 transition-colors justify-center">
+                              <span className={cn('text-xs font-medium', getCategoryColor(session.category))}>
+                                {session.category}
+                              </span>
+                            </SelectTrigger>
+                            <SelectContent align="center">
+                              {Array.from(new Set(categories.map(c => c.type))).sort().map((type) => (
+                                <div key={type}>
+                                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase capitalize mt-2 first:mt-0">
+                                    {type}
+                                  </div>
+                                  {categories.filter(c => c.type === type).map(c => (
+                                    <SelectItem key={c.id} value={`${type}:${c.name} `}>
+                                      <span className={c.color}>{c.name}</span>
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              ))}
+                              <div key="untracked">
+                                <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase capitalize mt-2">
+                                  Other
+                                </div>
+                                <SelectItem value="untracked:Untracked ">
+                                  <span className="text-muted-foreground italic">Untracked</span>
+                                </SelectItem>
+                              </div>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </td>
+
+                      {/* Start Time */}
+                      <td className="min-w-[120px] px-4 py-3">
+                        <div className={cn("flex justify-center transition-colors", isOverlapping && "text-destructive")}>
+                          <TimePicker
+                            value={session.startTime}
+                            onChange={(time) => updateSession(session.id!, { startTime: time })}
+                            placeholder="Start"
+                            className={cn(isOverlapping && "text-destructive border-destructive/50 ring-destructive/30")}
+                          />
+                        </div>
+                      </td>
+
+                      {/* End Time */}
+                      <td className="min-w-[120px] px-4 py-3">
+                        <div className={cn("flex justify-center transition-colors", isOverlapping && "text-destructive")}>
+                          <TimePicker
+                            value={session.endTime}
+                            onChange={(time) => updateSession(session.id!, { endTime: time })}
+                            placeholder="End"
+                            className={cn(isOverlapping && "text-destructive border-destructive/50 ring-destructive/30")}
+                          />
+                        </div>
+                      </td>
+
+                      {/* Duration */}
+                      <td className="min-w-[80px] px-4 py-3">
+                        <div className="flex justify-center">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {duration > 0 ? formatDuration(duration) : '—'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Notes */}
+                      <td className="min-w-[300px] px-4 py-3">
+                        <DescriptionInput
+                          sessionId={session.id!}
+                          initialDescription={session.description || ''}
+                          selectedDate={selectedDate}
+                          onUpdate={updateSession}
+                        />
+                        {session.richContent && session.richContent !== '' && (
+                          <div className="flex justify-end mt-1">
+                            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded-sm" title="Rich content attached">
+                              <Paperclip className="w-3 h-3" />
+                              Content
+                            </span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Delete */}
+                      <td className="w-[50px] px-4 py-3">
+                        <div className="flex justify-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteSession(session.id!)}
+                            className="h-7 w-7 text-muted-foreground hover:text-danger hover:bg-danger/10 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  );
+                })}
+              </AnimatePresence>
+            </tbody>
+          </table>
+        )}
       </div>
 
 
