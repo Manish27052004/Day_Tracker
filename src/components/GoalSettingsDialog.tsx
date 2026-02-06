@@ -29,6 +29,7 @@ import {
 } from '@/services/analyticsService';
 import { Target, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils'; // Assuming you have a cn utility
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface GoalSettingsDialogProps {
     analyticsCategories: AnalyticsCategory[];
@@ -158,7 +159,9 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px] bg-card border-border">
                 <DialogHeader>
-                    <DialogTitle>Productivity Goals</DialogTitle>
+                    <div className="flex items-center justify-between pr-4">
+                        <DialogTitle>Productivity Goals <span className="text-muted-foreground text-sm font-normal ml-2">({goals.length})</span></DialogTitle>
+                    </div>
                 </DialogHeader>
 
                 {/* Goals List */}
@@ -167,36 +170,47 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
                         <p className="text-sm text-muted-foreground text-center py-4">No goals set yet. Add one below!</p>
                     )}
 
-                    {goals.map(goal => (
-                        <div key={goal.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                            <div className="flex items-center gap-3">
-                                <div
-                                    className="w-4 h-4 rounded-full"
-                                    style={{ backgroundColor: goal.color }}
-                                />
-                                <div>
-                                    <div className="font-medium text-sm">{goal.label}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                        Target: {Math.floor(goal.target_hours)}h {Math.round((goal.target_hours % 1) * 60)}m ({goal.category_key})
+                    <AnimatePresence mode='popLayout'>
+                        {goals.map(goal => (
+                            <motion.div
+                                layout
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                transition={{ duration: 0.2 }}
+                                key={goal.id}
+                                className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div
+                                        className="w-4 h-4 rounded-full shadow-sm"
+                                        style={{ backgroundColor: goal.color }}
+                                    />
+                                    <div>
+                                        <div className="font-medium text-sm">{goal.label}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Target: {Math.floor(goal.target_hours)}h {Math.round((goal.target_hours % 1) * 60)}m ({goal.category_key})
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEditing(goal)}>
-                                    <Edit2 className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(goal.id)}>
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
+                                <div className="flex items-center gap-2">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary transition-colors" onClick={() => startEditing(goal)}>
+                                        <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/80 hover:text-destructive transition-colors" onClick={() => handleDelete(goal.id)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
                 </div>
 
                 {/* Add/Edit Form */}
                 <div className="space-y-4 border-t pt-4">
-                    <div className="font-medium text-sm">
+                    <div className="font-medium text-sm flex items-center gap-2">
                         {editingId ? 'Edit Goal' : 'Add New Goal'}
+                        {loading && <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>}
                     </div>
 
                     <div className="space-y-3">
@@ -206,7 +220,7 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
                                 value={label}
                                 onChange={e => setLabel(e.target.value)}
                                 placeholder="e.g. Sleep Target"
-                                className="h-8"
+                                className="h-8 transition-all focus:ring-2 focus:ring-primary/20"
                             />
                         </div>
 
@@ -214,7 +228,7 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
                             <div>
                                 <Label className="text-xs">Category Link</Label>
                                 <Select value={categoryKey} onValueChange={setCategoryKey}>
-                                    <SelectTrigger className="h-8">
+                                    <SelectTrigger className="h-8 transition-all focus:ring-2 focus:ring-primary/20">
                                         <SelectValue placeholder="Select..." />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -235,14 +249,14 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
                                         placeholder="Hr"
                                         value={hours}
                                         onChange={e => setHours(e.target.value)}
-                                        className="h-8"
+                                        className="h-8 transition-all focus:ring-2 focus:ring-primary/20"
                                     />
                                     <Input
                                         type="number"
                                         placeholder="Min"
                                         value={minutes}
                                         onChange={e => setMinutes(e.target.value)}
-                                        className="h-8"
+                                        className="h-8 transition-all focus:ring-2 focus:ring-primary/20"
                                     />
                                 </div>
                             </div>
@@ -257,7 +271,7 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
                                         type="button"
                                         onClick={() => setColor(c.value)}
                                         className={cn(
-                                            "w-6 h-6 rounded-full transition-transform hover:scale-110",
+                                            "w-6 h-6 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
                                             color === c.value ? "ring-2 ring-offset-2 ring-primary scale-110" : ""
                                         )}
                                         style={{ backgroundColor: c.value }}
@@ -274,7 +288,7 @@ const GoalSettingsDialog = ({ analyticsCategories, analyticsTypes, onGoalsUpdate
                                 Cancel
                             </Button>
                         )}
-                        <Button size="sm" onClick={handleSave} disabled={!label || !categoryKey}>
+                        <Button size="sm" onClick={handleSave} disabled={!label || !categoryKey} className="transition-all active:scale-95">
                             {editingId ? 'Update Goal' : 'Add Goal'}
                             {editingId ? <Check className="ml-1 h-3 w-3" /> : <Plus className="ml-1 h-3 w-3" />}
                         </Button>
