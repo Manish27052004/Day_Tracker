@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Settings, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, Settings, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ArrowRight, List, Rows3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 // CLOUD-ONLY MODE
 import { type Session, type Task, formatDuration, calculateDuration, getDateString, type Category } from '@/lib/db';
@@ -9,6 +9,7 @@ import { calculateStreakForTask } from '@/lib/streakCalculator'; // 🔥 FIX
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { PeriodSidebar } from '@/features/periods/PeriodSidebar'; // Import Sidebar
 import TimePicker from './TimePicker';
 import TaskComboBox from './TaskComboBox';
 import { SettingsDialog } from './SettingsDialog';
@@ -22,7 +23,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useUserPreferences } from '@/contexts/UserPreferencesContext';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { List, Rows3 } from 'lucide-react';
 // Removed Timeline imports
 
 const DescriptionInput = ({ sessionId, initialDescription, selectedDate, onUpdate }: { sessionId: string; initialDescription: string; selectedDate: Date; onUpdate: (id: string, updates: Partial<Session>) => void }) => {
@@ -81,6 +81,7 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
 
   // 🔥 FIX: Track session IDs to prevent duplicates
   const [sessionIds, setSessionIds] = useState<Map<number, string>>(new Map());
+  const [refreshTasksTrigger, setRefreshTasksTrigger] = useState(0); // Trigger for re-fetching tasks
 
   // Fetch sessions from Supabase
   useEffect(() => {
@@ -137,7 +138,7 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
       }
     };
     fetchTasks();
-  }, [dateString, user]);
+  }, [dateString, user, refreshTasksTrigger]); // Added refreshTasksTrigger dependency
 
   // Fetch categories (Dynamic from Supabase)
   useEffect(() => {
@@ -474,6 +475,14 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
         </Button>
       </div>
 
+      {/* Period Goals Sidebar */}
+      <div className="px-4 pt-3">
+        <PeriodSidebar
+          selectedDate={selectedDate}
+          onTaskAdded={() => setRefreshTasksTrigger(prev => prev + 1)}
+        />
+      </div>
+
       {/* Add Session Button (MOVED TO TOP) */}
       <motion.div
         className="p-3 bg-gradient-to-r from-primary/5 to-transparent border-b border-primary/10 flex gap-3 items-center"
@@ -799,7 +808,7 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
                             variant="ghost"
                             size="icon"
                             onClick={() => deleteSession(session.id!)}
-                            className="h-7 w-7 text-muted-foreground hover:text-danger hover:bg-danger/10 transition-colors"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mr-1"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -814,13 +823,11 @@ const ExecutionTable = ({ selectedDate, wakeUpTime }: ExecutionTableProps) => {
         )}
       </div>
 
-
-
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        defaultTab="categories"
-      />
+      <AnimatePresence>
+        {settingsOpen && (
+          <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

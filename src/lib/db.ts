@@ -17,6 +17,7 @@ export interface Task {
   syncStatus: 'pending' | 'synced' | 'error';
   userId?: string;
   isDeleted?: boolean; // Soft delete flag
+  periodTaskId?: number; // Link to a Period Task (Sprint Goal)
 }
 
 export interface Session {

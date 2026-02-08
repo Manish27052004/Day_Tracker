@@ -126,7 +126,8 @@ async function pushTasks(userId: string, result: SyncResult): Promise<void> {
                     progress: task.progress || 0,
                     is_deleted: task.isDeleted || false,
                     created_at: task.createdAt?.toISOString() || new Date().toISOString(),
-                    updated_at: task.updatedAt?.toISOString() || new Date().toISOString()
+                    updated_at: task.updatedAt?.toISOString() || new Date().toISOString(),
+                    period_task_id: task.periodTaskId || null
                 };
 
                 const { error } = await supabase
@@ -288,7 +289,8 @@ async function pullTasks(userId: string, result: SyncResult): Promise<void> {
                     createdAt: new Date(remoteTask.created_at),
                     updatedAt: new Date(remoteTask.updated_at),
                     syncStatus: 'synced', // Mark as synced (synced = 1)
-                    userId: userId
+                    userId: userId,
+                    periodTaskId: remoteTask.period_task_id // Map from snake_case
                 });
                 result.pulled++;
             }
