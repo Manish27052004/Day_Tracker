@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import CookieConsent from '@/components/CookieConsent';
 import { ModeToggle } from "@/components/mode-toggle";
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
@@ -35,6 +36,7 @@ const MainLayout = () => {
             </main>
             
             <Footer />
+            <CookieConsent />
         </div>
     );
 };

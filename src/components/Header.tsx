@@ -113,9 +113,9 @@ const Header = () => {
             )}
 
             {/* App Title */}
-            <h1 className="text-lg font-semibold text-foreground">
+            <span className="text-lg font-semibold text-foreground">
               Daily Tracker
-            </h1>
+            </span>
 
             {/* Desktop: Day Start Selector */}
             {!isMobile && (

@@ -20,6 +20,7 @@ import Register from "./pages/Register";
 import About from "./pages/About";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import ContactUs from "./pages/ContactUs";
 // ModeSelection and Attendance removed for simplicity
 import MainLayout from "./layouts/MainLayout";
 import MatrixDashboard from "@/features/matrix/MatrixDashboard";
@@ -96,6 +97,7 @@ const App = () => {
                         <Route path="/about" element={<About />} />
                         <Route path="/privacy" element={<PrivacyPolicy />} />
                         <Route path="/terms" element={<TermsOfService />} />
+                        <Route path="/contact" element={<ContactUs />} />
                       </Route>
 
                       {/* Protected Routes */}
