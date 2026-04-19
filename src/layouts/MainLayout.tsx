@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useState } from 'react';
 import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import { ModeToggle } from "@/components/mode-toggle";
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
@@ -32,6 +33,8 @@ const MainLayout = () => {
             <main className="flex-1 overflow-auto">
                 <Outlet />
             </main>
+            
+            <Footer />
         </div>
     );
 };

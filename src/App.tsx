@@ -17,6 +17,9 @@ import NotFound from "./pages/NotFound";
 import DebugPage from "./DebugPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import About from "./pages/About";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
 // ModeSelection and Attendance removed for simplicity
 import MainLayout from "./layouts/MainLayout";
 import MatrixDashboard from "@/features/matrix/MatrixDashboard";
@@ -87,6 +90,13 @@ const App = () => {
                       <Route path="/login" element={<Login />} />
                       <Route path="/register" element={<Register />} />
                       <Route path="/debug" element={<DebugPage />} />
+
+                      {/* Public Legal Pages (with Layout) */}
+                      <Route element={<MainLayout />}>
+                        <Route path="/about" element={<About />} />
+                        <Route path="/privacy" element={<PrivacyPolicy />} />
+                        <Route path="/terms" element={<TermsOfService />} />
+                      </Route>
 
                       {/* Protected Routes */}
                       <Route

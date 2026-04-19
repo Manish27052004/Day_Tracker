@@ -204,6 +204,60 @@ const Index = () => {
       >
         {renderPhaseContent()}
       </motion.div>
+
+      {/* Educational & Contextual Content for AdSense (Thin Content Fix) */}
+      <div className="mt-16 bg-card rounded-lg p-6 md:p-8 shadow-sm border border-border/50 text-card-foreground">
+        <section className="mb-8">
+          <h2 className="text-2xl font-semibold mb-4 text-primary">How to Use This Tracker</h2>
+          <ol className="list-decimal list-inside space-y-2 text-muted-foreground ml-2">
+            <li><strong className="text-foreground">Plan Your Day:</strong> Start by adding your daily tasks, appointments, and habits in the Planning phase.</li>
+            <li><strong className="text-foreground">Execute & Track:</strong> Move to the Execution phase to mark tasks as complete, track your time, and log any unplanned activities.</li>
+            <li><strong className="text-foreground">Review Progress:</strong> Use the Breakdown and Analytics screens to monitor your daily efficiency and long-term trends.</li>
+          </ol>
+        </section>
+
+        <section className="mb-8">
+          <h2 className="text-2xl font-semibold mb-4 text-primary">Why Track Your Daily Tasks?</h2>
+          <p className="text-muted-foreground leading-relaxed">
+            Consistently tracking your daily activities is a proven method for improving productivity and time management. 
+            By visualizing where your time goes, you can identify inefficiencies, stay focused on high-priority objectives, 
+            and build lasting, positive habits. A daily tracker serves as a personal accountability partner, ensuring you 
+            make incremental progress toward your goals every single day.
+          </p>
+        </section>
+
+        <section className="mb-8">
+          <h2 className="text-2xl font-semibold mb-4 text-primary">Features</h2>
+          <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-2">
+            <li><strong className="text-foreground">Lightning Fast:</strong> Optimized client-side performance for immediate responsiveness.</li>
+            <li><strong className="text-foreground">Local Storage:</strong> Your data is stored securely in your browser for maximum privacy.</li>
+            <li><strong className="text-foreground">Distraction-Free:</strong> A clean, minimalist interface designed to keep you focused.</li>
+            <li><strong className="text-foreground">Comprehensive Analytics:</strong> Visual breakdowns of your daily performance.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="text-2xl font-semibold mb-4 text-primary">Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-medium text-foreground">Is my tracking data secure?</h3>
+              <p className="text-muted-foreground mt-1">Yes, everything is saved locally in your browser. If you enable sync features, data is encrypted securely.</p>
+            </div>
+            <div>
+              <h3 className="font-medium text-foreground">Do I need an account to use this?</h3>
+              <p className="text-muted-foreground mt-1">No, you can start tracking immediately without signing up. An account is only needed if you want to sync your data across multiple devices.</p>
+            </div>
+            <div>
+              <h3 className="font-medium text-foreground">Can I use this on my phone?</h3>
+              <p className="text-muted-foreground mt-1">Absolutely. This tracker is fully responsive and designed to work seamlessly across desktop, tablet, and mobile devices.</p>
+            </div>
+            <div>
+              <h3 className="font-medium text-foreground">How does the habit matrix work?</h3>
+              <p className="text-muted-foreground mt-1">The Habit Matrix gives you a bird's-eye view of your consistency over time, utilizing automated templates based on your routine.</p>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 };
